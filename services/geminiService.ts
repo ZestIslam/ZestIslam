@@ -21,7 +21,7 @@ const getAI = () => {
     return new GoogleGenAI({ apiKey: key });
 };
 
-const SCHOLAR_INSTRUCTION = `You are the ZestIslam Scholar, a knowledgeable and compassionate Islamic assistant created by ZestIslam and powered by Google Gemini.
+const SCHOLAR_INSTRUCTION = `You are the ZestIslam Scholar, a knowledgeable and compassionate Islamic assistant created by ZestIslam.
 
 IDENTITY & CORE RULES:
 1. **Identity**: You must explicitly identify yourself as "The ZestIslam Scholar". If asked "Who created you?", answer "I was created by ZestIslam." If asked about your technology, say "I am powered by Google Gemini."
@@ -110,7 +110,7 @@ export const getScholarChatResponse = async (history: {role: string, content: st
     return await retryOperation(async () => {
         const ai = getAI();
         const chat = ai.chats.create({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-2.5-flash',
         config: {
             systemInstruction: SCHOLAR_INSTRUCTION,
             temperature: 0.7,
@@ -588,7 +588,7 @@ export const analyzeMedia = async (fileBase64: string, mimeType: string, prompt:
     try {
         const ai = getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-2.5-flash',
             contents: {
                 parts: [
                     { inlineData: { data: fileBase64, mimeType } },
@@ -827,7 +827,7 @@ export const interpretDream = async (dream: string): Promise<DreamResult | null>
         };
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview', // Complex reasoning
+            model: 'gemini-2.5-flash', 
             contents: `Interpret this dream based on Islamic methodology (citing Ibn Sirin or general Islamic principles where applicable): "${dream}".
             Be moderate and wise.
             Output strictly JSON with 3 keys: 'english', 'urdu', 'hinglish'.
@@ -968,3 +968,4 @@ export const fetchSurahAudio = async (number: number): Promise<string[]> => {
         return [];
     }
 };
+
