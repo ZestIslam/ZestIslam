@@ -1,8 +1,10 @@
+
 {
   "name": "ZestIslam",
   "description": "A modern, AI-powered Islamic companion featuring smart Quran search, a scholar chatbot, personalized Dua generation, and location-based prayer times.",
   "requestFramePermissions": [
     "geolocation",
-    "microphone"
+    "microphone",
+    "camera"
   ]
 }
