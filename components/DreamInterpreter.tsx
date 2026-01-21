@@ -82,22 +82,24 @@ const DreamInterpreter: React.FC = () => {
 
                         <div className={`prose prose-sm prose-indigo dark:prose-invert text-slate-700 dark:text-slate-300 ${lang === 'urdu' ? 'text-right' : ''}`} dir={lang === 'urdu' ? 'rtl' : 'ltr'}>
                             <p className={`leading-relaxed ${lang === 'urdu' ? 'font-arabic text-lg' : ''}`}>
-                                {result[lang].interpretation}
+                                {result[lang]?.interpretation || 'Interpretation details are being retrieved...'}
                             </p>
                         </div>
 
-                        <div className={lang === 'urdu' ? 'text-right' : ''} dir={lang === 'urdu' ? 'rtl' : 'ltr'}>
-                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                                {lang === 'urdu' ? 'علامات' : 'Key Symbols'}
-                            </h4>
-                            <div className={`flex flex-wrap gap-2 ${lang === 'urdu' ? 'justify-end' : ''}`}>
-                                {result[lang].symbols.map((s, i) => (
-                                    <span key={i} className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full text-sm font-medium">
-                                        {s}
-                                    </span>
-                                ))}
+                        {result[lang]?.symbols && result[lang].symbols.length > 0 && (
+                            <div className={lang === 'urdu' ? 'text-right' : ''} dir={lang === 'urdu' ? 'rtl' : 'ltr'}>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                                    {lang === 'urdu' ? 'علامات' : 'Key Symbols'}
+                                </h4>
+                                <div className={`flex flex-wrap gap-2 ${lang === 'urdu' ? 'justify-end' : ''}`}>
+                                    {result[lang].symbols.map((s, i) => (
+                                        <span key={i} className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full text-sm font-medium">
+                                            {s}
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className={`bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800 ${lang === 'urdu' ? 'text-right' : ''}`} dir={lang === 'urdu' ? 'rtl' : 'ltr'}>
                             <h4 className={`text-sm font-bold text-emerald-800 dark:text-emerald-300 mb-2 flex items-center gap-2 ${lang === 'urdu' ? 'flex-row-reverse' : ''}`}>
@@ -105,7 +107,7 @@ const DreamInterpreter: React.FC = () => {
                                 {lang === 'urdu' ? 'روحانی نصیحت' : 'Spiritual Advice'}
                             </h4>
                             <p className={`text-sm text-emerald-700 dark:text-emerald-400 italic ${lang === 'urdu' ? 'font-arabic text-lg not-italic' : ''}`}>
-                                "{result[lang].advice}"
+                                "{result[lang]?.advice || 'Keep your faith strong and seek clarity through prayer.'}"
                             </p>
                         </div>
                     </div>
