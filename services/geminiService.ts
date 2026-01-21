@@ -168,7 +168,18 @@ export const generateTadabbur = async (surah: string, verseNumber: number): Prom
         const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Spiritual Tadabbur for ${surah}:${verseNumber}. JSON with english, urdu, hinglish keys.`,
-        config: { responseMimeType: "application/json" }
+        config: { 
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    verseReference: { type: Type.STRING },
+                    english: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
+                    urdu: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
+                    hinglish: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } }
+                }
+            }
+        }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -180,7 +191,18 @@ export const generateSharh = async (book: string, hadithNumber: string): Promise
         const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Spiritual Sharh for ${book} Hadith ${hadithNumber}. JSON with english, urdu, hinglish keys.`,
-        config: { responseMimeType: "application/json" }
+        config: { 
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    hadithReference: { type: Type.STRING },
+                    english: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
+                    urdu: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
+                    hinglish: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } }
+                }
+            }
+        }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -192,7 +214,19 @@ export const generatePersonalizedDua = async (situation: string): Promise<Genera
         const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Beautiful Dua for: "${situation}". Return JSON.`,
-        config: { responseMimeType: "application/json" }
+        config: { 
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING },
+                    arabic: { type: Type.STRING },
+                    transliteration: { type: Type.STRING },
+                    translation: { type: Type.STRING }
+                },
+                required: ["title", "arabic", "transliteration", "translation"]
+            }
+        }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -206,20 +240,29 @@ export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', 
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
             const parsed = JSON.parse(cached);
-            // Strictly check if the cached wisdom belongs to TODAY
             if (parsed.date === today) {
                 return parsed.data;
             }
         }
     } catch (e) {}
 
-    // Only if cache is empty OR outdated, we fetch a new one
     const data = await retryOperation(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Provide one unique, short, inspiring Ayah or Hadith for today (${today}). Variety is essential. Avoid repeating the same common verses. Return JSON with 'type', 'text', 'source'.`,
-            config: { responseMimeType: "application/json" }
+            contents: `Provide one unique, short, inspiring Ayah or Hadith for today (${today}). Avoid repeating the same common verses. Return JSON with 'type', 'text', 'source'.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        type: { type: Type.STRING, enum: ["Ayah", "Hadith"] },
+                        text: { type: Type.STRING },
+                        source: { type: Type.STRING }
+                    },
+                    required: ["type", "text", "source"]
+                }
+            }
         });
         return response.text ? JSON.parse(response.text) : null;
     }, 2, 1000, { type: 'Ayah', text: 'Verily, with every hardship comes ease.', source: 'Surah Ash-Sharh 94:5' });
@@ -384,8 +427,21 @@ export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggesti
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Dhikr for: "${feeling}". Return JSON.`,
-            config: { responseMimeType: "application/json" }
+            contents: `Dhikr for feeling: "${feeling}". Return JSON.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        arabic: { type: Type.STRING },
+                        transliteration: { type: Type.STRING },
+                        meaning: { type: Type.STRING },
+                        benefit: { type: Type.STRING },
+                        target: { type: Type.INTEGER }
+                    },
+                    required: ["arabic", "transliteration", "meaning", "benefit", "target"]
+                }
+            }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -396,8 +452,20 @@ export const getNameInsight = async (name: string): Promise<NameInsight | null> 
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Insight for: "${name}". Return JSON.`,
-            config: { responseMimeType: "application/json" }
+            contents: `Insight for Name of Allah: "${name}". Return JSON.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING },
+                        english: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] },
+                        urdu: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] },
+                        hinglish: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] }
+                    },
+                    required: ["name", "english", "urdu", "hinglish"]
+                }
+            }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -408,8 +476,19 @@ export const interpretDream = async (dream: string): Promise<DreamResult | null>
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
-            contents: `Interpret dream: "${dream}". JSON.`,
-            config: { responseMimeType: "application/json" }
+            contents: `Interpret dream: "${dream}". Return JSON with multilingual support.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        english: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] },
+                        urdu: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] },
+                        hinglish: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] }
+                    },
+                    required: ["english", "urdu", "hinglish"]
+                }
+            }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -421,7 +500,22 @@ export const generateQuiz = async (topic: string, difficulty: string, count: num
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Generate ${count} ${difficulty} MCQ questions about ${topic}. JSON.`,
-            config: { responseMimeType: "application/json" }
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            question: { type: Type.STRING },
+                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            correctIndex: { type: Type.INTEGER },
+                            explanation: { type: Type.STRING }
+                        },
+                        required: ["question", "options", "correctIndex", "explanation"]
+                    }
+                }
+            }
         });
         return response.text ? JSON.parse(response.text) : [];
     });
