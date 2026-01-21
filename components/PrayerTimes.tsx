@@ -83,7 +83,7 @@ const PrayerTimes: React.FC = () => {
         setLoading(false);
       }
     );
-  }, []);
+  }, [fetchPrayerTimes]);
 
   // Re-fetch when settings change
   useEffect(() => {
@@ -96,7 +96,7 @@ const PrayerTimes: React.FC = () => {
 
   const toggleNotifications = async () => {
       if (!("Notification" in window)) {
-          alert("This browser does not support desktop notifications");
+          alert("This browser does not support notifications");
           return;
       }
       if (!notificationsEnabled) {
@@ -113,26 +113,6 @@ const PrayerTimes: React.FC = () => {
           localStorage.setItem('zestislam_prayer_notifications', 'false');
       }
   };
-
-  useEffect(() => {
-      if (!times || !notificationsEnabled) return;
-      const interval = setInterval(() => {
-          const now = new Date();
-          const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-          const prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-          prayers.forEach(prayer => {
-              const prayerTime = times[prayer]?.split(' ')[0];
-              if (prayerTime === currentTime) {
-                  const lastNotified = sessionStorage.getItem(`notified_${prayer}_${new Date().toDateString()}`);
-                  if (!lastNotified && Notification.permission === 'granted') {
-                      new Notification(`It's time for ${prayer}`, { body: "Hayya 'ala-s-Salah", icon: "https://cdn-icons-png.flaticon.com/512/3655/3655163.png" });
-                      sessionStorage.setItem(`notified_${prayer}_${new Date().toDateString()}`, 'true');
-                  }
-              }
-          });
-      }, 60000);
-      return () => clearInterval(interval);
-  }, [times, notificationsEnabled]);
 
   const calculateQibla = (lat1: number, lon1: number) => {
       const lat2 = 21.422487; const lon2 = 39.826206;
@@ -160,7 +140,7 @@ const PrayerTimes: React.FC = () => {
   };
 
   if (error) return <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-2xl text-center"><MapPin className="w-4 h-4 mx-auto mb-1" />{error}</div>;
-  if (loading || !times) return <div className="h-48 flex flex-col items-center justify-center text-emerald-600 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm"><Loader2 className="w-8 h-8 animate-spin mb-2" /><span className="text-xs font-bold text-slate-400">SYNCING PRAYER TIMES...</span></div>;
+  if (loading || !times) return <div className="h-48 flex flex-col items-center justify-center text-emerald-600 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm"><Loader2 className="w-8 h-8 animate-spin mb-2" /><span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Calculating Times...</span></div>;
 
   const nextPrayer = getNextPrayer(times);
 
@@ -179,8 +159,8 @@ const PrayerTimes: React.FC = () => {
                 </div>
                 <div className="flex flex-col items-end gap-3">
                     <div className="flex gap-2">
-                         <button onClick={() => setShowSettings(true)} className="p-3 rounded-2xl backdrop-blur-md transition-all border bg-white/10 text-slate-300 border-white/10 hover:bg-white/20"><Settings2 className="w-5 h-5" /></button>
-                         <button onClick={toggleNotifications} className={`p-3 rounded-2xl backdrop-blur-md transition-all border ${notificationsEnabled ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-white/10 text-slate-300 border-white/10 hover:bg-white/20'}`}>{notificationsEnabled ? <Bell className="w-5 h-5 fill-current" /> : <BellOff className="w-5 h-5" />}</button>
+                         <button onClick={() => setShowSettings(true)} className="p-3 rounded-2xl backdrop-blur-md transition-all border bg-white/10 text-slate-300 border-white/10 hover:bg-white/20" title="Settings"><Settings2 className="w-5 h-5" /></button>
+                         <button onClick={toggleNotifications} className={`p-3 rounded-2xl backdrop-blur-md transition-all border ${notificationsEnabled ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-white/10 text-slate-300 border-white/10 hover:bg-white/20'}`} title="Adhan Alerts">{notificationsEnabled ? <Bell className="w-5 h-5 fill-current" /> : <BellOff className="w-5 h-5" />}</button>
                     </div>
                     <div className="text-right">
                          {hijriDate && <div className="flex items-center justify-end text-emerald-100 text-sm font-medium"><Calendar className="w-3.5 h-3.5 mr-2 opacity-70" /><span>{hijriDate}</span></div>}
@@ -228,14 +208,14 @@ const PrayerTimes: React.FC = () => {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative border border-slate-200 dark:border-slate-800">
                     <button onClick={() => setShowSettings(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2"><Settings2 className="w-5 h-5 text-emerald-500" /> Prayer Settings</h3>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2 font-serif"><Settings2 className="w-5 h-5 text-emerald-500" /> Prayer Settings</h3>
                     
                     <div className="space-y-6">
                         <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-3">School of Thought (Asr Method)</label>
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-3">School of Thought (Asr)</label>
                             <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => setSchool(0)} className={`p-4 rounded-2xl text-sm font-bold border-2 transition-all ${school === 0 ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-transparent text-slate-500'}`}>Standard (Shafi'i, etc)</button>
-                                <button onClick={() => setSchool(1)} className={`p-4 rounded-2xl text-sm font-bold border-2 transition-all ${school === 1 ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-transparent text-slate-500'}`}>Hanafi</button>
+                                <button onClick={() => setSchool(0)} className={`p-4 rounded-2xl text-sm font-bold border-2 transition-all ${school === 0 ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-500'}`}>Standard (Shafi'i, etc)</button>
+                                <button onClick={() => setSchool(1)} className={`p-4 rounded-2xl text-sm font-bold border-2 transition-all ${school === 1 ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-500'}`}>Hanafi</button>
                             </div>
                         </div>
 
@@ -243,14 +223,14 @@ const PrayerTimes: React.FC = () => {
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-3">Calculation Method</label>
                             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-2 custom-scrollbar">
                                 {CALC_METHODS.map(m => (
-                                    <button key={m.id} onClick={() => setMethod(m.id)} className={`w-full p-3 rounded-xl text-left text-sm font-bold flex items-center justify-between transition-all ${method === m.id ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 dark:bg-slate-800 text-slate-600'}`}>
+                                    <button key={m.id} onClick={() => setMethod(m.id)} className={`w-full p-3 rounded-xl text-left text-sm font-bold flex items-center justify-between transition-all ${method === m.id ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
                                         {m.name}
                                         {method === m.id && <ChevronRight className="w-4 h-4" />}
                                     </button>
                                 ))}
                             </div>
                         </div>
-                        <button onClick={() => setShowSettings(false)} className="w-full bg-slate-900 dark:bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-lg mt-4">Save Configuration</button>
+                        <button onClick={() => setShowSettings(false)} className="w-full bg-slate-900 dark:bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-lg mt-4 active:scale-95 transition-transform uppercase tracking-widest text-xs">Save & Sync</button>
                     </div>
                 </div>
             </div>
