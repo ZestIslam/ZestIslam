@@ -221,12 +221,12 @@ const App: React.FC = () => {
             <div className="max-w-3xl mx-auto space-y-12 py-8">
                 <div className="text-center space-y-6">
                     <div className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center text-white mx-auto shadow-2xl"><Sparkles className="w-10 h-10" /></div>
-                    <h2 className="text-4xl font-bold text-slate-900 dark:text-white">About ZestIslam</h2>
+                    <h2 className="text-4xl font-bold text-slate-900 dark:text-white font-serif">About ZestIslam</h2>
                     <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg">Your modern Islamic companion bridging tradition and technology.</p>
                 </div>
                 <div className="grid md:grid-cols-2 gap-6 text-center">
-                    <a href="https://www.youtube.com/@zestislam" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3"><Youtube className="w-8 h-8 text-red-600" /><span className="font-bold">YouTube</span></a>
-                    <a href="https://www.instagram.com/zest_islam/" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3"><Instagram className="w-8 h-8 text-pink-600" /><span className="font-bold">Instagram</span></a>
+                    <a href="https://www.youtube.com/@zestislam" target="_blank" rel="noopener noreferrer" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3 hover:scale-105 transition-transform"><Youtube className="w-8 h-8 text-red-600" /><span className="font-bold">YouTube</span></a>
+                    <a href="https://www.instagram.com/zest_islam/" target="_blank" rel="noopener noreferrer" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3 hover:scale-105 transition-transform"><Instagram className="w-8 h-8 text-pink-600" /><span className="font-bold">Instagram</span></a>
                 </div>
             </div>
         );
@@ -234,29 +234,51 @@ const App: React.FC = () => {
         return (
             <div className="max-w-3xl mx-auto py-8">
                 <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
-                    <h3 className="font-bold text-2xl text-slate-800 dark:text-white mb-6">Support & Feedback</h3>
+                    <h3 className="font-bold text-2xl text-slate-800 dark:text-white mb-6 font-serif">Support & Feedback</h3>
                     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setSentSuccess(true); }}>
                         <input type="text" className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm" placeholder="Your Name" required />
                         <input type="email" className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm" placeholder="Email" required />
                         <textarea className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm h-32" placeholder="Message..." required />
-                        <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl">Send Message</button>
+                        <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-transform">Send Message</button>
                     </form>
                     {sentSuccess && <p className="mt-4 text-emerald-500 font-bold text-center">Message sent successfully!</p>}
                 </div>
             </div>
         );
       case AppView.PRAYER: return <div className="max-w-2xl mx-auto py-8"><PrayerTimes /></div>;
+      case AppView.UPDATE_PASSWORD:
+          return (
+              <div className="max-w-md mx-auto py-12 animate-fade-in-up">
+                  <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-600"></div>
+                      <div className="text-center mb-8">
+                          <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600 mx-auto mb-4"><KeyRound className="w-8 h-8" /></div>
+                          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Set New Password</h2>
+                      </div>
+                      <form onSubmit={async (e) => { e.preventDefault(); setAuthLoading(true); await updateUserPassword(authForm.password); setAuthLoading(false); setAuthSuccess("Password updated!"); setTimeout(() => setView(AppView.HOME), 2000); }} className="space-y-4">
+                            <input type="password" required value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border-none text-sm" placeholder="New Password" minLength={6} />
+                          {authSuccess && <div className="p-3 bg-emerald-50 text-emerald-600 text-xs rounded-lg text-center">{authSuccess}</div>}
+                          <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg disabled:opacity-70 flex items-center justify-center gap-2">
+                                {authLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                                {authLoading ? 'Updating...' : 'Update Password'}
+                          </button>
+                      </form>
+                  </div>
+              </div>
+          );
       default: return null;
     }
   };
 
   const groupedNav = navItems.reduce((acc, item) => {
       if (!acc[item.group]) acc[item.group] = [];
-      acc[item.group].push(item); return acc;
+      acc[item.group].push(item);
+      return acc;
   }, {} as Record<string, typeof navItems>);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 dark:text-slate-200 flex font-sans transition-colors duration-300">
+      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 fixed h-full z-30">
         <div className="p-8 pb-4">
             <div className="flex items-center gap-3 text-emerald-700 dark:text-emerald-500 mb-8">
