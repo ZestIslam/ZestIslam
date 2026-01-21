@@ -6,13 +6,15 @@ import { GeneratedDua, QuranVerse, TadabburResult, Hadith, SharhResult, DhikrSug
 let currentKeyIndex = 0;
 
 const getApiKeyPool = (): string[] => {
-  try {
-    const raw = process.env.API_KEY || '';
-    // Support multiple keys separated by commas
-    return raw.split(',').map(k => k.trim()).filter(k => k.length > 0);
-  } catch (e) {
-    return [];
-  }
+  // Collect from the 5 specific env variables provided by the user
+  const keys = [
+    process.env.API_KEY,
+    process.env.API_KEY1,
+    process.env.API_KEY2,
+    process.env.API_KEY3,
+    process.env.API_KEY4
+  ];
+  return keys.filter((k): k is string => typeof k === 'string' && k.trim().length > 0);
 };
 
 const getActiveApiKey = () => {
@@ -32,7 +34,7 @@ const rotateToNextKey = () => {
 const getAI = () => {
     const key = getActiveApiKey();
     if (!key) {
-        console.error("ZestIslam: API_KEY is missing. Add your 5 keys separated by commas.");
+        console.error("ZestIslam: All API keys are missing. Please add API_KEY, API_KEY1, etc. in your env.");
     }
     return new GoogleGenAI({ apiKey: key });
 };
@@ -233,24 +235,26 @@ export const generatePersonalizedDua = async (situation: string): Promise<Genera
 };
 
 export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', text: string, source: string } | null> => {
-    const CACHE_KEY = 'zestislam_daily_inspiration';
+    const CACHE_KEY = 'zestislam_daily_inspiration_v2';
     const today = new Date().toDateString();
 
     try {
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
             const parsed = JSON.parse(cached);
+            // Strictly check if the cached data is from today
             if (parsed.date === today) {
                 return parsed.data;
             }
         }
     } catch (e) {}
 
+    // Only if cache is missing or from another day
     const data = await retryOperation(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Provide one unique, short, inspiring Ayah or Hadith for today (${today}). Avoid repeating the same common verses. Return JSON with 'type', 'text', 'source'.`,
+            contents: `Provide one unique, short, inspiring Ayah or Hadith for today (${today}). Avoid repeating common ones. Return JSON with 'type', 'text', 'source'.`,
             config: { 
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -476,7 +480,7 @@ export const interpretDream = async (dream: string): Promise<DreamResult | null>
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
-            contents: `Interpret dream: "${dream}". Return JSON with multilingual support.`,
+            contents: `Interpret dream: "${dream}". Return JSON with english, urdu, and hinglish translations.`,
             config: { 
                 responseMimeType: "application/json",
                 responseSchema: {
