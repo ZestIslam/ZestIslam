@@ -16,9 +16,14 @@ const DreamInterpreter: React.FC = () => {
         if (!dream.trim()) return;
         setLoading(true);
         setResult(null);
-        const res = await interpretDream(dream);
-        setResult(res);
-        setLoading(false);
+        try {
+            const res = await interpretDream(dream);
+            setResult(res);
+        } catch (e) {
+            console.error("Interpretation failed", e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -33,7 +38,7 @@ const DreamInterpreter: React.FC = () => {
                 <p>
                     <strong>Disclaimer:</strong> This is an AI simulation referencing Islamic literature. 
                     True dream interpretation requires a qualified scholar. 
-                    Good dreams are from Allah, bad dreams are from Shaytan (seek refuge in Allah).
+                    Good dreams are from Allah, bad dreams are from Shaytan.
                 </p>
             </div>
 
@@ -82,7 +87,7 @@ const DreamInterpreter: React.FC = () => {
 
                         <div className={`prose prose-sm prose-indigo dark:prose-invert text-slate-700 dark:text-slate-300 ${lang === 'urdu' ? 'text-right' : ''}`} dir={lang === 'urdu' ? 'rtl' : 'ltr'}>
                             <p className={`leading-relaxed ${lang === 'urdu' ? 'font-arabic text-lg' : ''}`}>
-                                {result[lang]?.interpretation || 'Interpretation details are being retrieved...'}
+                                {result[lang]?.interpretation || 'No interpretation provided.'}
                             </p>
                         </div>
 
@@ -107,7 +112,7 @@ const DreamInterpreter: React.FC = () => {
                                 {lang === 'urdu' ? 'روحانی نصیحت' : 'Spiritual Advice'}
                             </h4>
                             <p className={`text-sm text-emerald-700 dark:text-emerald-400 italic ${lang === 'urdu' ? 'font-arabic text-lg not-italic' : ''}`}>
-                                "{result[lang]?.advice || 'Keep your faith strong and seek clarity through prayer.'}"
+                                "{result[lang]?.advice || 'Have patience and seek refuge in Allah.'}"
                             </p>
                         </div>
                     </div>
