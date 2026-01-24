@@ -27,14 +27,14 @@ const rotateToNextKey = () => {
     const pool = getApiKeyPool();
     if (pool.length > 1) {
         currentKeyIndex = (currentKeyIndex + 1) % pool.length;
-        console.warn(`ZestIslam: Quota reached. Rotating to API Key #${currentKeyIndex + 1}`);
+        console.warn(`ZestIslam: Rotating to API Key Index #${currentKeyIndex}`);
     }
 };
 
 const getAI = () => {
     const key = getActiveApiKey();
     if (!key) {
-        console.error("ZestIslam: All API keys are missing. Please add API_KEY, API_KEY1, etc. in your env.");
+        console.error("ZestIslam: All API keys are missing. Please add API_KEY, API_KEY1, etc. to your environment.");
     }
     return new GoogleGenAI({ apiKey: key });
 };
@@ -42,57 +42,44 @@ const getAI = () => {
 const SCHOLAR_INSTRUCTION = `You are the ZestIslam Scholar, a knowledgeable and compassionate Islamic assistant created by ZestIslam.
 
 IDENTITY & CORE RULES:
-1. **Identity**: You must explicitly identify yourself as "The ZestIslam Scholar". If asked "Who created you?", answer "I was created by ZestIslam."
-2. **Knowledge Source**: Base answers on the Quran and authentic Sunnah (Hadith).
-3. **Tone**: Polite, respectful, clear, and wise (Hikmah).
-4. **Formatting**: Use Markdown, bolding, and blockquotes for scriptural texts.`;
+1. **Identity**: You must explicitly identify yourself as "The ZestIslam Scholar".
+2. **Knowledge Source**: Base answers on the Quran and authentic Sunnah.
+3. **Tone**: Polite, respectful, clear, and wise.`;
 
-// --- HELPER FUNCTIONS FOR RATE LIMITING & ROTATION ---
+// --- HELPER FUNCTIONS ---
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 1000, fallbackValue?: T): Promise<T> {
+async function retryOperation<T>(operation: () => Promise<T>, retries = 5, delay = 1000, fallbackValue?: T): Promise<T> {
     try {
         return await operation();
     } catch (error: any) {
-        const errorMsg = error?.message || "";
-        const statusCode = error?.status || error?.code;
+        console.error("ZestIslam API Error:", error);
         
-        const isQuotaError = statusCode === 429 || errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('exhausted');
-        const isNotFoundError = errorMsg.includes("Requested entity was not found");
-
-        if (isQuotaError || isNotFoundError) {
-            rotateToNextKey(); 
-            if (retries > 0) {
-                await wait(delay);
-                return retryOperation(operation, retries - 1, delay, fallbackValue);
-            }
+        // Rotate on any significant error to ensure we use a working key
+        rotateToNextKey(); 
+        
+        if (retries > 0) {
+            await wait(delay);
+            return retryOperation(operation, retries - 1, delay, fallbackValue);
         }
         
-        if (fallbackValue !== undefined) {
-            return fallbackValue;
-        }
+        if (fallbackValue !== undefined) return fallbackValue;
         throw error;
     }
 }
-
-// ------------------------------------------
 
 export const getScholarChatResponse = async (history: {role: string, content: string}[], message: string): Promise<string> => {
   return await retryOperation(async () => {
     const ai = getAI();
     const chat = ai.chats.create({
       model: 'gemini-3-pro-preview',
-      config: {
-        systemInstruction: SCHOLAR_INSTRUCTION,
-        temperature: 0.7,
-      },
+      config: { systemInstruction: SCHOLAR_INSTRUCTION, temperature: 0.7 },
       history: history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
     });
-
     const result = await chat.sendMessage({ message });
     return result.text || "I apologize, I could not generate a response at this time.";
-  }, 3, 1000, "I am momentarily unavailable. Please remember that patience (Sabr) is a virtue. Try your question again in a moment.");
+  }, 3, 1000, "I am momentarily unavailable. Please try your question again in a moment.");
 };
 
 export const generateChatTitle = async (firstMessage: string): Promise<string> => {
@@ -164,51 +151,89 @@ export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
     }, 3, 1000, []); 
 };
 
-export const generateTadabbur = async (surah: string, verseNumber: number): Promise<TadabburResult | null> => {
-    return await retryOperation(async () => {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Spiritual Tadabbur for ${surah}:${verseNumber}. JSON with english, urdu, hinglish keys.`,
-        config: { 
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    verseReference: { type: Type.STRING },
-                    english: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
-                    urdu: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
-                    hinglish: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } }
-                }
-            }
-        }
-        });
-        return response.text ? JSON.parse(response.text) : null;
-    });
-};
+export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', text: string, source: string } | null> => {
+    const CACHE_KEY = 'zestislam_daily_wisdom_v6';
+    const today = new Date().toDateString();
 
-export const generateSharh = async (book: string, hadithNumber: string): Promise<SharhResult | null> => {
+    try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.date === today) return parsed.data;
+        }
+    } catch (e) {}
+
+    const data = await retryOperation(async () => {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `One short Ayah or Hadith for ${today}. JSON with type, text, source.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        type: { type: Type.STRING, enum: ["Ayah", "Hadith"] },
+                        text: { type: Type.STRING },
+                        source: { type: Type.STRING }
+                    },
+                    required: ["type", "text", "source"]
+                }
+            }
+        });
+        return response.text ? JSON.parse(response.text) : null;
+    }, 2, 1000, { type: 'Ayah', text: 'Verily, with every hardship comes ease.', source: 'Quran 94:5' });
+    
+    if (data) localStorage.setItem(CACHE_KEY, JSON.stringify({ date: today, data }));
+    return data;
+}
+
+export const getNameInsight = async (name: string): Promise<NameInsight | null> => {
     return await retryOperation(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Spiritual Sharh for ${book} Hadith ${hadithNumber}. JSON with english, urdu, hinglish keys.`,
-        config: { 
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    hadithReference: { type: Type.STRING },
-                    english: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
-                    urdu: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } },
-                    hinglish: { type: Type.OBJECT, properties: { paragraph: { type: Type.STRING }, points: { type: Type.ARRAY, items: { type: Type.STRING } } } }
+            model: 'gemini-3-flash-preview',
+            contents: `Insight for Name of Allah: "${name}". Return JSON with english, urdu, and hinglish.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING },
+                        english: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] },
+                        urdu: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] },
+                        hinglish: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] }
+                    },
+                    required: ["name", "english", "urdu", "hinglish"]
                 }
             }
-        }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
-};
+}
+
+export const interpretDream = async (dream: string): Promise<DreamResult | null> => {
+    return await retryOperation(async () => {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview', 
+            contents: `Interpret dream: "${dream}". JSON with english, urdu, hinglish.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        english: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] },
+                        urdu: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] },
+                        hinglish: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] }
+                    },
+                    required: ["english", "urdu", "hinglish"]
+                }
+            }
+        });
+        return response.text ? JSON.parse(response.text) : null;
+    });
+}
 
 export const generatePersonalizedDua = async (situation: string): Promise<GeneratedDua | null> => {
     return await retryOperation(async () => {
@@ -234,96 +259,163 @@ export const generatePersonalizedDua = async (situation: string): Promise<Genera
     });
 };
 
-export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', text: string, source: string } | null> => {
-    const CACHE_KEY = 'zestislam_daily_inspiration_v2';
-    const today = new Date().toDateString();
-
-    try {
-        const cached = localStorage.getItem(CACHE_KEY);
-        if (cached) {
-            const parsed = JSON.parse(cached);
-            // Strictly check if the cached data is from today
-            if (parsed.date === today) {
-                return parsed.data;
-            }
-        }
-    } catch (e) {}
-
-    // Only if cache is missing or from another day
-    const data = await retryOperation(async () => {
+export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggestion | null> => {
+    return await retryOperation(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Provide one unique, short, inspiring Ayah or Hadith for today (${today}). Avoid repeating common ones. Return JSON with 'type', 'text', 'source'.`,
+            contents: `Dhikr for: "${feeling}". JSON.`,
             config: { 
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                        type: { type: Type.STRING, enum: ["Ayah", "Hadith"] },
-                        text: { type: Type.STRING },
-                        source: { type: Type.STRING }
+                        arabic: { type: Type.STRING },
+                        transliteration: { type: Type.STRING },
+                        meaning: { type: Type.STRING },
+                        benefit: { type: Type.STRING },
+                        target: { type: Type.INTEGER }
                     },
-                    required: ["type", "text", "source"]
+                    required: ["arabic", "transliteration", "meaning", "benefit", "target"]
                 }
             }
         });
         return response.text ? JSON.parse(response.text) : null;
-    }, 2, 1000, { type: 'Ayah', text: 'Verily, with every hardship comes ease.', source: 'Surah Ash-Sharh 94:5' });
-    
-    if (data) {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ date: today, data }));
-    }
-    return data;
+    });
 }
 
-export const generateThumbnail = async (prompt: string, aspectRatio: string, size: string, usePro: boolean): Promise<string | null> => {
-  return await retryOperation(async () => {
-    const ai = getAI();
-    const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-    const response = await ai.models.generateContent({
-      model,
-      contents: { parts: [{ text: `Islamic aesthetic art: ${prompt}` }] },
-      config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: usePro ? size as any : undefined } }
-    });
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-    }
-    return null;
-  });
-};
-
-export const editIslamicImage = async (base64Image: string, prompt: string): Promise<string | null> => {
-  return await retryOperation(async () => {
-    const ai = getAI();
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: { parts: [{ inlineData: { mimeType: 'image/png', data: base64Image } }, { text: prompt }] }
-    });
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-    }
-    return null;
-  });
-};
-
-export const generateVeoVideo = async (prompt: string, imageBase64?: string, aspectRatio: string = '16:9'): Promise<string | null> => {
+export const generateQuiz = async (topic: string, difficulty: string, count: number): Promise<QuizQuestion[]> => {
     return await retryOperation(async () => {
         const ai = getAI();
-        const model = 'veo-3.1-fast-generate-preview';
-        let operation = await ai.models.generateVideos({
-            model,
-            prompt,
-            image: imageBase64 ? { imageBytes: imageBase64, mimeType: 'image/png' } : undefined,
-            config: { numberOfVideos: 1, resolution: '720p', aspectRatio: aspectRatio as any }
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `Generate ${count} ${difficulty} MCQs about ${topic}. JSON.`,
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            question: { type: Type.STRING },
+                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            correctIndex: { type: Type.INTEGER },
+                            explanation: { type: Type.STRING }
+                        },
+                        required: ["question", "options", "correctIndex", "explanation"]
+                    }
+                }
+            }
         });
-        while (!operation.done) {
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            operation = await ai.operations.getVideosOperation({operation: operation});
+        return response.text ? JSON.parse(response.text) : [];
+    });
+}
+
+export const fetchSurahList = async (): Promise<SurahMeta[]> => {
+    try {
+        const response = await fetch('https://api.alquran.cloud/v1/surah');
+        const data = await response.json();
+        return data.code === 200 ? data.data : [];
+    } catch (e) { return []; }
+};
+
+export const fetchFullSurah = async (number: number): Promise<{ meta: SurahMeta, verses: FullSurahVerse[] } | null> => {
+    try {
+        const response = await fetch(`https://api.aladhan.com/v1/surah/${number}/editions/quran-uthmani,en.sahih`);
+        const data = await response.json();
+        if (data.code === 200 && data.data.length === 2) {
+            const arabicData = data.data[0];
+            const englishData = data.data[1];
+            return {
+                meta: arabicData,
+                verses: arabicData.ayahs.map((ayah: any, index: number) => ({
+                    number: ayah.number,
+                    text: ayah.text,
+                    translation: englishData.ayahs[index].text,
+                    numberInSurah: ayah.numberInSurah
+                }))
+            };
         }
-        const uri = operation.response?.generatedVideos?.[0]?.video?.uri;
-        return uri ? `${uri}&key=${getActiveApiKey()}` : null;
-    }, 2, 2000);
+        return null;
+    } catch (e) { return null; }
+};
+
+export const fetchSurahAudio = async (number: number): Promise<string[]> => {
+    try {
+        const response = await fetch(`https://api.aladhan.com/v1/surah/${number}/ar.alafasy`);
+        const data = await response.json();
+        return data.code === 200 ? data.data.ayahs.map((ayah: any) => ayah.audio) : [];
+    } catch (e) { return []; }
+};
+
+export const textToSpeech = async (text: string): Promise<ArrayBuffer | null> => {
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-preview-tts',
+        contents: { parts: [{ text }] },
+        config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+        }
+    });
+    const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (base64) {
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+        return bytes.buffer;
+    }
+    return null;
+}
+
+let activeAudioSource: AudioBufferSourceNode | null = null;
+export const stopGeneratedAudio = () => {
+    if (activeAudioSource) { try { activeAudioSource.stop(); } catch (e) {} activeAudioSource = null; }
+};
+
+export const playGeneratedAudio = async (text: string, type: 'general' | 'verse' | 'hadith' | 'name' = 'general', speed: number = 1.0, onEnded?: () => void) => {
+    try {
+        stopGeneratedAudio();
+        const buffer = await textToSpeech(text);
+        if (!buffer) return;
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const data = new Uint8Array(buffer);
+        const dataInt16 = new Int16Array(data.buffer);
+        const audioBuffer = ctx.createBuffer(1, dataInt16.length, 24000);
+        const channelData = audioBuffer.getChannelData(0);
+        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.playbackRate.value = speed;
+        source.connect(ctx.destination);
+        source.onended = () => { if (activeAudioSource === source) activeAudioSource = null; if (onEnded) onEnded(); };
+        activeAudioSource = source;
+        source.start(0);
+    } catch (e) { if (onEnded) onEnded(); }
+}
+
+export const generateTadabbur = async (surah: string, verseNumber: number): Promise<TadabburResult | null> => {
+    return await retryOperation(async () => {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Spiritual Tadabbur for ${surah}:${verseNumber}. JSON with english, urdu, hinglish keys.`,
+        config: { responseMimeType: "application/json" }
+        });
+        return response.text ? JSON.parse(response.text) : null;
+    });
+};
+
+export const generateSharh = async (book: string, hadithNumber: string): Promise<SharhResult | null> => {
+    return await retryOperation(async () => {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Spiritual Sharh for ${book} Hadith ${hadithNumber}. JSON with english, urdu, hinglish keys.`,
+        config: { responseMimeType: "application/json" }
+        });
+        return response.text ? JSON.parse(response.text) : null;
+    });
 };
 
 export const findIslamicPlaces = async (query: string, lat: number, lng: number, locationName?: string): Promise<{ places: any[] }> => {
@@ -356,208 +448,132 @@ export const searchIslamicWeb = async (query: string): Promise<{text: string, ch
     });
 };
 
-export const analyzeMedia = async (fileBase64: string, mimeType: string, prompt: string): Promise<string> => {
-    return await retryOperation(async () => {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ inlineData: { data: fileBase64, mimeType } }, { text: prompt }] }
-        });
-        return response.text || "No analysis available.";
-    });
-};
+// --- MEDIA SERVICES ---
 
-export const transcribeMedia = async (fileBase64: string, mimeType: string): Promise<string> => {
+/**
+ * Generates a thumbnail image based on a prompt.
+ * Uses gemini-3-pro-image-preview if usePro is true, otherwise gemini-2.5-flash-image.
+ */
+export const generateThumbnail = async (prompt: string, aspectRatio: string = "1:1", imageSize: string = "1K", usePro: boolean = false): Promise<string | null> => {
     return await retryOperation(async () => {
         const ai = getAI();
+        const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ inlineData: { data: fileBase64, mimeType } }, { text: "Transcribe this." }] }
-        });
-        return response.text || "No transcription available.";
-    });
-}
-
-export const textToSpeech = async (text: string, type: 'general' | 'verse' | 'hadith' | 'name' = 'general'): Promise<ArrayBuffer | null> => {
-    return await retryOperation(async () => {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-preview-tts',
-            contents: { parts: [{ text }] },
+            model: model,
+            contents: { parts: [{ text: prompt }] },
             config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+                imageConfig: {
+                    aspectRatio: aspectRatio as any,
+                    imageSize: usePro ? imageSize as any : undefined
+                }
             }
         });
-        const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (base64) {
-             const binaryString = atob(base64);
-             const bytes = new Uint8Array(binaryString.length);
-             for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-             return bytes.buffer;
+        
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+            if (part.inlineData) {
+                return `data:image/png;base64,${part.inlineData.data}`;
+            }
         }
         return null;
     });
-}
-
-let activeAudioSource: AudioBufferSourceNode | null = null;
-export const stopGeneratedAudio = () => {
-    if (activeAudioSource) { try { activeAudioSource.stop(); } catch (e) {} activeAudioSource = null; }
 };
 
-export const playGeneratedAudio = async (text: string, type: 'general' | 'verse' | 'hadith' | 'name' = 'general', speed: number = 1.0, onEnded?: () => void) => {
-    try {
-        stopGeneratedAudio();
-        const buffer = await textToSpeech(text, type);
-        if (!buffer) return;
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        const data = new Uint8Array(buffer);
-        const dataInt16 = new Int16Array(data.buffer);
-        const audioBuffer = ctx.createBuffer(1, dataInt16.length, 24000);
-        const channelData = audioBuffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.playbackRate.value = speed;
-        source.connect(ctx.destination);
-        source.onended = () => { if (activeAudioSource === source) activeAudioSource = null; if (onEnded) onEnded(); };
-        activeAudioSource = source;
-        source.start(0);
-    } catch (e) { console.error(e); if (onEnded) onEnded(); }
-}
-
-export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggestion | null> => {
+/**
+ * Generates a video using the Veo model.
+ * Note: Video generation can take up to a few minutes.
+ */
+export const generateVeoVideo = async (prompt: string, imageB64?: string, aspectRatio: string = '16:9'): Promise<string | null> => {
     return await retryOperation(async () => {
         const ai = getAI();
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Dhikr for feeling: "${feeling}". Return JSON.`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        arabic: { type: Type.STRING },
-                        transliteration: { type: Type.STRING },
-                        meaning: { type: Type.STRING },
-                        benefit: { type: Type.STRING },
-                        target: { type: Type.INTEGER }
-                    },
-                    required: ["arabic", "transliteration", "meaning", "benefit", "target"]
-                }
+        let operation = await ai.models.generateVideos({
+            model: 'veo-3.1-fast-generate-preview',
+            prompt: prompt,
+            image: imageB64 ? {
+                imageBytes: imageB64,
+                mimeType: 'image/png'
+            } : undefined,
+            config: {
+                numberOfVideos: 1,
+                resolution: '720p',
+                aspectRatio: aspectRatio as any
             }
         });
-        return response.text ? JSON.parse(response.text) : null;
-    });
-}
 
-export const getNameInsight = async (name: string): Promise<NameInsight | null> => {
-    return await retryOperation(async () => {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Insight for Name of Allah: "${name}". Return JSON.`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        name: { type: Type.STRING },
-                        english: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] },
-                        urdu: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] },
-                        hinglish: { type: Type.OBJECT, properties: { meaning: { type: Type.STRING }, reflection: { type: Type.STRING }, application: { type: Type.STRING } }, required: ["meaning", "reflection", "application"] }
-                    },
-                    required: ["name", "english", "urdu", "hinglish"]
-                }
-            }
-        });
-        return response.text ? JSON.parse(response.text) : null;
-    });
-}
+        while (!operation.done) {
+            await wait(10000);
+            operation = await ai.operations.getVideosOperation({ operation: operation });
+        }
 
-export const interpretDream = async (dream: string): Promise<DreamResult | null> => {
-    return await retryOperation(async () => {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview', 
-            contents: `Interpret dream: "${dream}". Return JSON with english, urdu, and hinglish translations.`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        english: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] },
-                        urdu: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] },
-                        hinglish: { type: Type.OBJECT, properties: { interpretation: { type: Type.STRING }, symbols: { type: Type.ARRAY, items: { type: Type.STRING } }, advice: { type: Type.STRING } }, required: ["interpretation", "symbols", "advice"] }
-                    },
-                    required: ["english", "urdu", "hinglish"]
-                }
-            }
-        });
-        return response.text ? JSON.parse(response.text) : null;
-    });
-}
-
-export const generateQuiz = async (topic: string, difficulty: string, count: number): Promise<QuizQuestion[]> => {
-    return await retryOperation(async () => {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate ${count} ${difficulty} MCQ questions about ${topic}. JSON.`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            question: { type: Type.STRING },
-                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            correctIndex: { type: Type.INTEGER },
-                            explanation: { type: Type.STRING }
-                        },
-                        required: ["question", "options", "correctIndex", "explanation"]
-                    }
-                }
-            }
-        });
-        return response.text ? JSON.parse(response.text) : [];
-    });
-}
-
-export const fetchSurahList = async (): Promise<SurahMeta[]> => {
-    try {
-        const response = await fetch('https://api.alquran.cloud/v1/surah');
-        const data = await response.json();
-        return data.code === 200 ? data.data : [];
-    } catch (e) { return []; }
-};
-
-export const fetchFullSurah = async (number: number): Promise<{ meta: SurahMeta, verses: FullSurahVerse[] } | null> => {
-    try {
-        const response = await fetch(`https://api.alquran.cloud/v1/surah/${number}/editions/quran-uthmani,en.sahih`);
-        const data = await response.json();
-        if (data.code === 200 && data.data.length === 2) {
-            const arabicData = data.data[0];
-            const englishData = data.data[1];
-            return {
-                meta: arabicData,
-                verses: arabicData.ayahs.map((ayah: any, index: number) => ({
-                    number: ayah.number,
-                    text: ayah.text,
-                    translation: englishData.ayahs[index].text,
-                    numberInSurah: ayah.numberInSurah
-                }))
-            };
+        const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+        if (downloadLink) {
+            const apiKey = getActiveApiKey();
+            const response = await fetch(`${downloadLink}&key=${apiKey}`);
+            const blob = await response.blob();
+            return URL.createObjectURL(blob);
         }
         return null;
-    } catch (e) { return null; }
+    }, 1, 10000); // Reduced retries for long video operations
 };
 
-export const fetchSurahAudio = async (number: number): Promise<string[]> => {
-    try {
-        const response = await fetch(`https://api.alquran.cloud/v1/surah/${number}/ar.alafasy`);
-        const data = await response.json();
-        return data.code === 200 ? data.data.ayahs.map((ayah: any) => ayah.audio) : [];
-    } catch (e) { return []; }
+/**
+ * Edits an image based on provided base64 data and instructions.
+ */
+export const editIslamicImage = async (base64ImageData: string, prompt: string): Promise<string | null> => {
+    return await retryOperation(async () => {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    { inlineData: { data: base64ImageData, mimeType: 'image/png' } },
+                    { text: prompt }
+                ]
+            }
+        });
+
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+            if (part.inlineData) {
+                return `data:image/png;base64,${part.inlineData.data}`;
+            }
+        }
+        return null;
+    });
+};
+
+/**
+ * Analyzes media (image or video) and provides detailed insights.
+ */
+export const analyzeMedia = async (base64Data: string, mimeType: string, prompt: string): Promise<string> => {
+    return await retryOperation(async () => {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: {
+                parts: [
+                    { inlineData: { data: base64Data, mimeType: mimeType } },
+                    { text: prompt }
+                ]
+            }
+        });
+        return response.text || "Unable to analyze media content at this time.";
+    });
+};
+
+/**
+ * Transcribes audio or video content into text.
+ */
+export const transcribeMedia = async (base64Data: string, mimeType: string): Promise<string> => {
+    return await retryOperation(async () => {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: {
+                parts: [
+                    { inlineData: { data: base64Data, mimeType: mimeType } },
+                    { text: "Accurately transcribe the spoken content in this media. Provide only the transcription text." }
+                ]
+            }
+        });
+        return response.text || "No transcription could be extracted from this media.";
+    });
 };
