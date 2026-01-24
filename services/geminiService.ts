@@ -1,12 +1,11 @@
-
 import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
 import { GeneratedDua, QuranVerse, TadabburResult, Hadith, SharhResult, DhikrSuggestion, NameInsight, DreamResult, QuizQuestion, SurahMeta, FullSurahVerse } from "../types";
 
 // --- API KEY ROTATION ENGINE ---
+// Optimized for ZestIslam to use a pool of 5 keys
 let currentKeyIndex = 0;
 
 const getApiKeyPool = (): string[] => {
-  // Collect from the 5 specific env variables provided by the user
   const keys = [
     process.env.API_KEY,
     process.env.API_KEY1,
@@ -14,6 +13,7 @@ const getApiKeyPool = (): string[] => {
     process.env.API_KEY3,
     process.env.API_KEY4
   ];
+  // Remove empty or undefined keys
   return keys.filter((k): k is string => typeof k === 'string' && k.trim().length > 0);
 };
 
@@ -27,7 +27,7 @@ const rotateToNextKey = () => {
     const pool = getApiKeyPool();
     if (pool.length > 1) {
         currentKeyIndex = (currentKeyIndex + 1) % pool.length;
-        console.warn(`ZestIslam: Rotating to API Key Index #${currentKeyIndex}`);
+        console.warn(`ZestIslam: Quota or Error encountered. Rotating to API Key Index #${currentKeyIndex}`);
     }
 };
 
@@ -44,7 +44,8 @@ const SCHOLAR_INSTRUCTION = `You are the ZestIslam Scholar, a knowledgeable and 
 IDENTITY & CORE RULES:
 1. **Identity**: You must explicitly identify yourself as "The ZestIslam Scholar".
 2. **Knowledge Source**: Base answers on the Quran and authentic Sunnah.
-3. **Tone**: Polite, respectful, clear, and wise.`;
+3. **Tone**: Polite, respectful, clear, and wise (Hikmah).
+4. **Formatting**: Use Markdown for clear presentation.`;
 
 // --- HELPER FUNCTIONS ---
 
@@ -56,12 +57,12 @@ async function retryOperation<T>(operation: () => Promise<T>, retries = 5, delay
     } catch (error: any) {
         console.error("ZestIslam API Error:", error);
         
-        // Rotate on any significant error to ensure we use a working key
+        // Rotate on any significant error (Quota, Overloaded, etc.)
         rotateToNextKey(); 
         
         if (retries > 0) {
             await wait(delay);
-            return retryOperation(operation, retries - 1, delay, fallbackValue);
+            return retryOperation(operation, retries - 1, delay * 1.5, fallbackValue);
         }
         
         if (fallbackValue !== undefined) return fallbackValue;
@@ -152,15 +153,12 @@ export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
 };
 
 export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', text: string, source: string } | null> => {
-    const CACHE_KEY = 'zestislam_daily_wisdom_v6';
     const today = new Date().toDateString();
+    const CACHE_KEY = `zestislam_wisdom_${today}`;
 
     try {
         const cached = localStorage.getItem(CACHE_KEY);
-        if (cached) {
-            const parsed = JSON.parse(cached);
-            if (parsed.date === today) return parsed.data;
-        }
+        if (cached) return JSON.parse(cached);
     } catch (e) {}
 
     const data = await retryOperation(async () => {
@@ -168,23 +166,12 @@ export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', 
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `One short Ayah or Hadith for ${today}. JSON with type, text, source.`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        type: { type: Type.STRING, enum: ["Ayah", "Hadith"] },
-                        text: { type: Type.STRING },
-                        source: { type: Type.STRING }
-                    },
-                    required: ["type", "text", "source"]
-                }
-            }
+            config: { responseMimeType: "application/json" }
         });
         return response.text ? JSON.parse(response.text) : null;
     }, 2, 1000, { type: 'Ayah', text: 'Verily, with every hardship comes ease.', source: 'Quran 94:5' });
     
-    if (data) localStorage.setItem(CACHE_KEY, JSON.stringify({ date: today, data }));
+    if (data) localStorage.setItem(CACHE_KEY, JSON.stringify(data));
     return data;
 }
 
@@ -265,20 +252,7 @@ export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggesti
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Dhikr for: "${feeling}". JSON.`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        arabic: { type: Type.STRING },
-                        transliteration: { type: Type.STRING },
-                        meaning: { type: Type.STRING },
-                        benefit: { type: Type.STRING },
-                        target: { type: Type.INTEGER }
-                    },
-                    required: ["arabic", "transliteration", "meaning", "benefit", "target"]
-                }
-            }
+            config: { responseMimeType: "application/json" }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -290,22 +264,7 @@ export const generateQuiz = async (topic: string, difficulty: string, count: num
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Generate ${count} ${difficulty} MCQs about ${topic}. JSON.`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            question: { type: Type.STRING },
-                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            correctIndex: { type: Type.INTEGER },
-                            explanation: { type: Type.STRING }
-                        },
-                        required: ["question", "options", "correctIndex", "explanation"]
-                    }
-                }
-            }
+            config: { responseMimeType: "application/json" }
         });
         return response.text ? JSON.parse(response.text) : [];
     });
@@ -450,10 +409,6 @@ export const searchIslamicWeb = async (query: string): Promise<{text: string, ch
 
 // --- MEDIA SERVICES ---
 
-/**
- * Generates a thumbnail image based on a prompt.
- * Uses gemini-3-pro-image-preview if usePro is true, otherwise gemini-2.5-flash-image.
- */
 export const generateThumbnail = async (prompt: string, aspectRatio: string = "1:1", imageSize: string = "1K", usePro: boolean = false): Promise<string | null> => {
     return await retryOperation(async () => {
         const ai = getAI();
@@ -470,28 +425,19 @@ export const generateThumbnail = async (prompt: string, aspectRatio: string = "1
         });
         
         for (const part of response.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
-                return `data:image/png;base64,${part.inlineData.data}`;
-            }
+            if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
         }
         return null;
     });
 };
 
-/**
- * Generates a video using the Veo model.
- * Note: Video generation can take up to a few minutes.
- */
 export const generateVeoVideo = async (prompt: string, imageB64?: string, aspectRatio: string = '16:9'): Promise<string | null> => {
     return await retryOperation(async () => {
         const ai = getAI();
         let operation = await ai.models.generateVideos({
             model: 'veo-3.1-fast-generate-preview',
             prompt: prompt,
-            image: imageB64 ? {
-                imageBytes: imageB64,
-                mimeType: 'image/png'
-            } : undefined,
+            image: imageB64 ? { imageBytes: imageB64, mimeType: 'image/png' } : undefined,
             config: {
                 numberOfVideos: 1,
                 resolution: '720p',
@@ -505,75 +451,48 @@ export const generateVeoVideo = async (prompt: string, imageB64?: string, aspect
         }
 
         const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-        if (downloadLink) {
-            const apiKey = getActiveApiKey();
-            const response = await fetch(`${downloadLink}&key=${apiKey}`);
-            const blob = await response.blob();
-            return URL.createObjectURL(blob);
-        }
+        if (downloadLink) return `${downloadLink}&key=${getActiveApiKey()}`;
         return null;
-    }, 1, 10000); // Reduced retries for long video operations
+    });
 };
 
-/**
- * Edits an image based on provided base64 data and instructions.
- */
 export const editIslamicImage = async (base64ImageData: string, prompt: string): Promise<string | null> => {
     return await retryOperation(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: {
-                parts: [
-                    { inlineData: { data: base64ImageData, mimeType: 'image/png' } },
-                    { text: prompt }
-                ]
+                parts: [{ inlineData: { data: base64ImageData, mimeType: 'image/png' } }, { text: prompt }]
             }
         });
 
         for (const part of response.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
-                return `data:image/png;base64,${part.inlineData.data}`;
-            }
+            if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
         }
         return null;
     });
 };
 
-/**
- * Analyzes media (image or video) and provides detailed insights.
- */
 export const analyzeMedia = async (base64Data: string, mimeType: string, prompt: string): Promise<string> => {
     return await retryOperation(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-pro-preview',
-            contents: {
-                parts: [
-                    { inlineData: { data: base64Data, mimeType: mimeType } },
-                    { text: prompt }
-                ]
-            }
+            contents: { parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: prompt }] }
         });
-        return response.text || "Unable to analyze media content at this time.";
+        return response.text || "Unable to analyze media content.";
     });
 };
 
-/**
- * Transcribes audio or video content into text.
- */
 export const transcribeMedia = async (base64Data: string, mimeType: string): Promise<string> => {
     return await retryOperation(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: {
-                parts: [
-                    { inlineData: { data: base64Data, mimeType: mimeType } },
-                    { text: "Accurately transcribe the spoken content in this media. Provide only the transcription text." }
-                ]
+                parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: "Provide a detailed transcription." }]
             }
         });
-        return response.text || "No transcription could be extracted from this media.";
+        return response.text || "No transcription found.";
     });
 };
