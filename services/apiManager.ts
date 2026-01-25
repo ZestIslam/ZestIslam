@@ -1,11 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
 class ApiKeyManager {
-    public getAI() {
-        const key = this.getActiveKey();
-        if (!key) throw new Error("No API Key available");
-        return new GoogleGenerativeAI(key);
-    }
     private keys: string[] = [];
     private currentIndex: number = 0;
 
