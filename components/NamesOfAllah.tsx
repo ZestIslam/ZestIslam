@@ -143,7 +143,6 @@ const NamesOfAllah: React.FC = () => {
         setSelectedName(name);
         setInsight(null);
         setFailed(false);
-        // We trigger manual reveal instead of auto-fetch for better UX control
     };
 
     const playAudio = async (e: React.MouseEvent, text: string) => {
@@ -192,7 +191,7 @@ const NamesOfAllah: React.FC = () => {
                     <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] max-w-lg w-full overflow-hidden shadow-2xl relative border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
                         <button 
                             onClick={() => setSelectedName(null)} 
-                            className="absolute top-4 right-4 p-2 bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 rounded-full text-slate-500 dark:text-slate-400 transition-colors"
+                            className="absolute top-4 right-4 p-2 bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 rounded-full text-slate-500 dark:text-slate-400 transition-colors z-20"
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -227,7 +226,7 @@ const NamesOfAllah: React.FC = () => {
                                     </button>
                                 </div>
                             ) : insight ? (
-                                <div className="space-y-6 animate-fade-in">
+                                <div className="space-y-6 animate-fade-in pb-4">
                                     <div className="bg-white dark:bg-slate-900 p-1 rounded-2xl flex shadow-sm border border-slate-200 dark:border-slate-800">
                                         {(['english', 'urdu', 'hinglish'] as Language[]).map(l => (
                                             <button 
@@ -241,15 +240,15 @@ const NamesOfAllah: React.FC = () => {
                                     </div>
                                     <div className={`${lang === 'urdu' ? 'text-right' : ''}`} dir={lang === 'urdu' ? 'rtl' : 'ltr'}>
                                         <p className={`text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 ${lang === 'urdu' ? 'font-quran text-2xl' : ''}`}>
-                                            {insight[lang].meaning}
+                                            {insight[lang]?.meaning || 'Meaning not available.'}
                                         </p>
                                         <p className={`text-slate-600 dark:text-slate-400 leading-relaxed mb-6 ${lang === 'urdu' ? 'font-quran text-xl leading-loose' : ''}`}>
-                                            {insight[lang].reflection}
+                                            {insight[lang]?.reflection || 'Reflection not available.'}
                                         </p>
                                         <div className="bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-[2rem] border border-emerald-100 dark:border-emerald-800/50">
                                             <h5 className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mb-3">Living this Attribute</h5>
                                             <p className={`text-slate-700 dark:text-slate-300 font-medium ${lang === 'urdu' ? 'font-quran text-xl' : 'text-sm'}`}>
-                                                {insight[lang].application}
+                                                {insight[lang]?.application || 'Practical application not available.'}
                                             </p>
                                         </div>
                                     </div>
@@ -266,6 +265,16 @@ const NamesOfAllah: React.FC = () => {
                                     </button>
                                 </div>
                             )}
+                        </div>
+
+                        {/* Footer Close Button */}
+                        <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+                            <button 
+                                onClick={() => setSelectedName(null)}
+                                className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
+                            >
+                                <X className="w-4 h-4" /> Close Details
+                            </button>
                         </div>
                     </div>
                 </div>
