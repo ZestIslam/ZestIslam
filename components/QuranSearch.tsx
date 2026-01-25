@@ -85,7 +85,9 @@ const QuranSearch: React.FC = () => {
   };
 
   const stopAudio = () => {
-      if (audioRef.current) audioRef.current.pause();
+      if (audioRef.current) {
+          audioRef.current.pause();
+      }
       setIsPlaying(false);
       setCurrentTrackIndex(-1);
       setAudioPlaylist([]);
@@ -230,7 +232,7 @@ const QuranSearch: React.FC = () => {
         </div>
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Topic (e.g. Patience) or Surah name..." className="w-full pl-12 sm:pl-16 pr-24 sm:pr-32 py-4 sm:py-5 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 shadow-lg shadow-slate-200/50 dark:shadow-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all text-sm sm:text-lg text-slate-700 dark:text-slate-200 placeholder:text-slate-400" />
         <div className="absolute inset-y-2 right-2 sm:right-3">
-            <button type="submit" disabled={loading || !query} className="h-full bg-slate-900 dark:bg-emerald-600 hover:bg-emerald-600 text-white px-5 sm:px-8 rounded-full font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm sm:text-base">
+            <button type="submit" disabled={loading || !query} className="h-full bg-slate-900 dark:bg-emerald-600 hover:bg-emerald-700 text-white px-5 sm:px-8 rounded-full font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm sm:text-base">
                 {loading ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : 'Search'}
             </button>
         </div>
@@ -268,11 +270,13 @@ const QuranSearch: React.FC = () => {
                               <button key={l} onClick={() => setExpandedTadabbur(prev => prev ? {...prev, lang: l as any} : null)} className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-lg transition-all ${expandedTadabbur.lang === l ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-500'}`}>{l}</button>
                           ))}
                       </div>
-                      <p className={`text-slate-700 dark:text-slate-300 mb-4 text-sm sm:text-base leading-relaxed ${expandedTadabbur.lang === 'urdu' ? 'text-right font-quran text-lg leading-loose' : ''}`}>{expandedTadabbur.data[expandedTadabbur.lang].paragraph}</p>
+                      <p className={`text-slate-700 dark:text-slate-300 mb-4 text-sm sm:text-base leading-relaxed ${expandedTadabbur.lang === 'urdu' ? 'text-right font-quran text-lg leading-loose' : ''}`}>
+                          {expandedTadabbur.data[expandedTadabbur.lang]?.paragraph || "Reflection content not available in this language."}
+                      </p>
                       <ul className={`space-y-2 ${expandedTadabbur.lang === 'urdu' ? 'text-right' : ''}`}>
-                          {expandedTadabbur.data[expandedTadabbur.lang].points.map((p, i) => (
+                          {expandedTadabbur.data[expandedTadabbur.lang]?.points?.map((p, i) => (
                               <li key={i} className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex gap-2"><span className="text-emerald-500 shrink-0">•</span> {p}</li>
-                          ))}
+                          )) || null}
                       </ul>
                   </div>
               )}
