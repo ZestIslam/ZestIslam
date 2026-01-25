@@ -163,7 +163,7 @@ const QuranSearch: React.FC = () => {
       return (
           <div className="max-w-4xl mx-auto space-y-4 sm:space-y-8 animate-fade-in pb-32">
               <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-20 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-2">
-                  <button onClick={() => setReadingSurah(null)} className="flex items-center gap-1 sm:gap-2 text-slate-500 hover:text-emerald-600 transition-colors text-sm sm:text-base"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /> Back</button>
+                  <button onClick={() => setReadingSurah(null)} className="flex items-center gap-1 sm:gap-2 text-slate-500 hover:text-emerald-600 transition-colors text-sm sm:text-base"><ChevronLeft className="w-4 h-4 sm:w-5 h-5" /> Back</button>
                   <div className="text-center">
                       <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{readingSurah.meta.englishName}</h2>
                       <p className="text-[10px] sm:text-xs text-slate-400 font-quran">{readingSurah.meta.name}</p>
@@ -271,12 +271,12 @@ const QuranSearch: React.FC = () => {
                           ))}
                       </div>
                       <p className={`text-slate-700 dark:text-slate-300 mb-4 text-sm sm:text-base leading-relaxed ${expandedTadabbur.lang === 'urdu' ? 'text-right font-quran text-lg leading-loose' : ''}`}>
-                          {expandedTadabbur.data[expandedTadabbur.lang]?.paragraph || "Reflection content not available in this language."}
+                          {expandedTadabbur.data?.[expandedTadabbur.lang]?.paragraph || "Reflection content not available in this language."}
                       </p>
                       <ul className={`space-y-2 ${expandedTadabbur.lang === 'urdu' ? 'text-right' : ''}`}>
-                          {expandedTadabbur.data[expandedTadabbur.lang]?.points?.map((p, i) => (
+                          {expandedTadabbur.data?.[expandedTadabbur.lang]?.points?.map((p, i) => (
                               <li key={i} className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 flex gap-2"><span className="text-emerald-500 shrink-0">•</span> {p}</li>
-                          )) || null}
+                          )) || <li className="text-xs text-slate-400 italic">No specific points available.</li>}
                       </ul>
                   </div>
               )}
@@ -285,7 +285,7 @@ const QuranSearch: React.FC = () => {
 
         {!searched && results.length === 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-2 sm:px-0">
-                {allSurahs.map(surah => (
+                {allSurahs.slice(0, 114).map(surah => (
                     <button key={surah.number} onClick={() => openFullSurah(surah.number)} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-left transition-all group hover:shadow-md">
                         <div className="flex items-center justify-between mb-2">
                             <span className="w-8 h-8 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 group-hover:text-emerald-600 transition-colors shrink-0">{surah.number}</span>
