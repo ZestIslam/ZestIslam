@@ -1,43 +1,6 @@
 import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
 import { GeneratedDua, QuranVerse, TadabburResult, Hadith, SharhResult, DhikrSuggestion, NameInsight, DreamResult, QuizQuestion, SurahMeta, FullSurahVerse } from "../types";
-
-// --- API KEY ROTATION ENGINE ---
-// Optimized for ZestIslam to use a pool of 5 keys
-let currentKeyIndex = 0;
-
-const getApiKeyPool = (): string[] => {
-  const keys = [
-    process.env.API_KEY,
-    process.env.API_KEY1,
-    process.env.API_KEY2,
-    process.env.API_KEY3,
-    process.env.API_KEY4
-  ];
-  // Remove empty or undefined keys
-  return keys.filter((k): k is string => typeof k === 'string' && k.trim().length > 0);
-};
-
-const getActiveApiKey = () => {
-  const pool = getApiKeyPool();
-  if (pool.length === 0) return '';
-  return pool[currentKeyIndex % pool.length];
-};
-
-const rotateToNextKey = () => {
-    const pool = getApiKeyPool();
-    if (pool.length > 1) {
-        currentKeyIndex = (currentKeyIndex + 1) % pool.length;
-        console.warn(`ZestIslam: Quota or Error encountered. Rotating to API Key Index #${currentKeyIndex}`);
-    }
-};
-
-const getAI = () => {
-    const key = getActiveApiKey();
-    if (!key) {
-        console.error("ZestIslam: All API keys are missing. Please add API_KEY, API_KEY1, etc. to your environment.");
-    }
-    return new GoogleGenAI({ apiKey: key });
-};
+import { apiManager } from "./apiManager";
 
 const SCHOLAR_INSTRUCTION = `You are the ZestIslam Scholar, a knowledgeable and compassionate Islamic assistant created by ZestIslam.
 
@@ -58,7 +21,7 @@ async function retryOperation<T>(operation: () => Promise<T>, retries = 5, delay
         console.error("ZestIslam API Error:", error);
         
         // Rotate on any significant error (Quota, Overloaded, etc.)
-        rotateToNextKey(); 
+        apiManager.rotate(); 
         
         if (retries > 0) {
             await wait(delay);
@@ -72,7 +35,7 @@ async function retryOperation<T>(operation: () => Promise<T>, retries = 5, delay
 
 export const getScholarChatResponse = async (history: {role: string, content: string}[], message: string): Promise<string> => {
   return await retryOperation(async () => {
-    const ai = getAI();
+    const ai = apiManager.getAI();
     const chat = ai.chats.create({
       model: 'gemini-3-pro-preview',
       config: { systemInstruction: SCHOLAR_INSTRUCTION, temperature: 0.7 },
@@ -85,7 +48,7 @@ export const getScholarChatResponse = async (history: {role: string, content: st
 
 export const generateChatTitle = async (firstMessage: string): Promise<string> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Generate a 4-word title for: "${firstMessage}". Return ONLY text.`,
@@ -96,7 +59,7 @@ export const generateChatTitle = async (firstMessage: string): Promise<string> =
 
 export const searchQuranByType = async (query: string): Promise<QuranVerse[]> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Find 5 Quranic verses for topic: "${query}". Return JSON.`,
@@ -124,7 +87,7 @@ export const searchQuranByType = async (query: string): Promise<QuranVerse[]> =>
 
 export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Find 5 authentic Hadiths for topic: "${query}". Return JSON.`,
@@ -162,7 +125,7 @@ export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', 
     } catch (e) {}
 
     const data = await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `One short Ayah or Hadith for ${today}. JSON with type, text, source.`,
@@ -177,7 +140,7 @@ export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', 
 
 export const getNameInsight = async (name: string): Promise<NameInsight | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Insight for Name of Allah: "${name}". Return JSON with english, urdu, and hinglish.`,
@@ -201,7 +164,7 @@ export const getNameInsight = async (name: string): Promise<NameInsight | null> 
 
 export const interpretDream = async (dream: string): Promise<DreamResult | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
             contents: `Interpret dream: "${dream}". JSON with english, urdu, hinglish.`,
@@ -224,7 +187,7 @@ export const interpretDream = async (dream: string): Promise<DreamResult | null>
 
 export const generatePersonalizedDua = async (situation: string): Promise<GeneratedDua | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Beautiful Dua for: "${situation}". Return JSON.`,
@@ -248,7 +211,7 @@ export const generatePersonalizedDua = async (situation: string): Promise<Genera
 
 export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggestion | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Dhikr for: "${feeling}". JSON.`,
@@ -260,7 +223,7 @@ export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggesti
 
 export const generateQuiz = async (topic: string, difficulty: string, count: number): Promise<QuizQuestion[]> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Generate ${count} ${difficulty} MCQs about ${topic}. JSON.`,
@@ -308,11 +271,12 @@ export const fetchSurahAudio = async (number: number): Promise<string[]> => {
 };
 
 export const textToSpeech = async (text: string): Promise<ArrayBuffer | null> => {
-    const ai = getAI();
+    const ai = apiManager.getAI();
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: { parts: [{ text }] },
         config: {
+            // Corrected typo: responseModalalities -> responseModalities
             responseModalities: [Modality.AUDIO],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
         }
@@ -355,7 +319,7 @@ export const playGeneratedAudio = async (text: string, type: 'general' | 'verse'
 
 export const generateTadabbur = async (surah: string, verseNumber: number): Promise<TadabburResult | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Spiritual Tadabbur for ${surah}:${verseNumber}. JSON with english, urdu, hinglish keys.`,
@@ -367,7 +331,7 @@ export const generateTadabbur = async (surah: string, verseNumber: number): Prom
 
 export const generateSharh = async (book: string, hadithNumber: string): Promise<SharhResult | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Spiritual Sharh for ${book} Hadith ${hadithNumber}. JSON with english, urdu, hinglish keys.`,
@@ -379,7 +343,7 @@ export const generateSharh = async (book: string, hadithNumber: string): Promise
 
 export const findIslamicPlaces = async (query: string, lat: number, lng: number, locationName?: string): Promise<{ places: any[] }> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: `Search for real ${query} near ${locationName || 'current area'}. Lat: ${lat}, Lng: ${lng}. USE Google Maps.`,
@@ -394,7 +358,7 @@ export const findIslamicPlaces = async (query: string, lat: number, lng: number,
 
 export const searchIslamicWeb = async (query: string): Promise<{text: string, chunks: any[]} | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: `Research Islamic information: "${query}". Use Search.`,
@@ -411,7 +375,7 @@ export const searchIslamicWeb = async (query: string): Promise<{text: string, ch
 
 export const generateThumbnail = async (prompt: string, aspectRatio: string = "1:1", imageSize: string = "1K", usePro: boolean = false): Promise<string | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
         const response = await ai.models.generateContent({
             model: model,
@@ -433,7 +397,7 @@ export const generateThumbnail = async (prompt: string, aspectRatio: string = "1
 
 export const generateVeoVideo = async (prompt: string, imageB64?: string, aspectRatio: string = '16:9'): Promise<string | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         let operation = await ai.models.generateVideos({
             model: 'veo-3.1-fast-generate-preview',
             prompt: prompt,
@@ -451,14 +415,14 @@ export const generateVeoVideo = async (prompt: string, imageB64?: string, aspect
         }
 
         const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-        if (downloadLink) return `${downloadLink}&key=${getActiveApiKey()}`;
+        if (downloadLink) return `${downloadLink}&key=${apiManager.getActiveKey()}`;
         return null;
     });
 };
 
 export const editIslamicImage = async (base64ImageData: string, prompt: string): Promise<string | null> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: {
@@ -475,7 +439,7 @@ export const editIslamicImage = async (base64ImageData: string, prompt: string):
 
 export const analyzeMedia = async (base64Data: string, mimeType: string, prompt: string): Promise<string> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-pro-preview',
             contents: { parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: prompt }] }
@@ -486,7 +450,7 @@ export const analyzeMedia = async (base64Data: string, mimeType: string, prompt:
 
 export const transcribeMedia = async (base64Data: string, mimeType: string): Promise<string> => {
     return await retryOperation(async () => {
-        const ai = getAI();
+        const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: {
