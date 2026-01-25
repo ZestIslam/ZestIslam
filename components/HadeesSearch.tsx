@@ -68,14 +68,14 @@ const HadeesSearch: React.FC = () => {
                     ))}
                 </div>
                 <p className={`text-slate-700 dark:text-slate-300 mb-6 sm:mb-8 leading-relaxed font-medium text-sm sm:text-base ${expanded.lang === 'urdu' ? 'font-quran text-xl sm:text-2xl text-right leading-loose' : ''}`} dir={expanded.lang === 'urdu' ? 'rtl' : 'ltr'}>
-                    {expanded.data[expanded.lang]?.paragraph || "Sharh not available in this language."}
+                    {expanded.data?.[expanded.lang]?.paragraph || "Sharh not available in this language."}
                 </p>
                 <div>
                     <h5 className={`font-bold text-slate-900 dark:text-white text-[10px] sm:text-xs uppercase tracking-wide mb-4 flex items-center gap-2 ${expanded.lang === 'urdu' ? 'flex-row-reverse' : ''}`}><Sparkles className="w-3 h-3 text-emerald-500" />{expanded.lang === 'urdu' ? 'اہم نکات' : 'Key Benefits'}</h5>
                     <ul className={`space-y-2 sm:space-y-3 ${expanded.lang === 'urdu' ? 'text-right' : ''}`} dir={expanded.lang === 'urdu' ? 'rtl' : 'ltr'}>
-                        {expanded.data[expanded.lang]?.points?.map((p, i) => (
+                        {expanded.data?.[expanded.lang]?.points?.map((p, i) => (
                             <li key={i} className={`flex gap-3 sm:gap-4 items-start p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm ${expanded.lang === 'urdu' ? 'flex-row-reverse' : ''}`}><span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i+1}</span><span className={`text-slate-700 dark:text-slate-300 ${expanded.lang === 'urdu' ? 'font-quran text-lg sm:text-xl leading-loose' : 'text-xs sm:text-sm'}`}>{p}</span></li>
-                        )) || null}
+                        )) || <li className="text-xs text-slate-400 italic">No key points available.</li>}
                     </ul>
                 </div>
                 <button onClick={() => setExpandedSharh(null)} className="w-full mt-6 sm:mt-8 py-3 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">Close Explanation</button>
