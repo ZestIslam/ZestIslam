@@ -8,43 +8,49 @@ class ApiKeyManager {
         this.refreshKeys();
     }
 
-    private refreshKeys() {
+    public refreshKeys() {
         // Read the primary API_KEY env var
-        const mainKeyString = process.env.API_KEY || '';
+        // Strip ALL whitespace characters, quotes, and hidden formatting characters
+        const rawKeyString = (process.env.API_KEY || '')
+            .replace(/["']/g, '') // Remove quotes
+            .replace(/\s/g, '')   // Remove all whitespace/newlines
+            .trim();
         
-        // Support format like: "key1", "key2", 'key3'
-        if (mainKeyString.includes(',')) {
-            this.keys = mainKeyString.split(',')
+        if (rawKeyString.includes(',')) {
+            this.keys = rawKeyString.split(',')
                 .map(k => k.trim())
-                // Remove leading/trailing quotes (double or single)
-                .map(k => k.replace(/^["']|["']$/g, '').trim())
                 .filter(k => k.length > 0);
-        } else if (mainKeyString.trim().length > 0) {
-            // Handle single key even if quoted
-            this.keys = [mainKeyString.trim().replace(/^["']|["']$/g, '').trim()];
+        } else if (rawKeyString.length > 0) {
+            this.keys = [rawKeyString];
         }
 
         if (this.keys.length === 0) {
-            console.error("ZestIslam: Critical Error - No valid API keys found in API_KEY environment variable.");
+            console.error("ZestIslam: API_KEY is empty. Please set it in Vercel/Hosting settings.");
         } else {
-            console.log(`ZestIslam: API Manager initialized with ${this.keys.length} keys.`);
+            // Log obfuscated key info for debugging
+            this.keys.forEach((key, i) => {
+                console.log(`ZestIslam: Key #${i+1} loaded (Length: ${key.length}, Starts with: ${key.substring(0, 3)}...)`);
+            });
         }
     }
 
     public getActiveKey(): string {
-        if (this.keys.length === 0) return '';
-        return this.keys[this.currentIndex % this.keys.length];
+        if (this.keys.length === 0) {
+            this.refreshKeys();
+        }
+        return this.keys[this.currentIndex % this.keys.length] || '';
     }
 
     public rotate() {
         if (this.keys.length > 1) {
             this.currentIndex = (this.currentIndex + 1) % this.keys.length;
-            console.warn(`ZestIslam Security: Rotated to API Key #${this.currentIndex + 1} of ${this.keys.length}`);
+            console.warn(`ZestIslam: Error detected. Rotating to API Key #${this.currentIndex + 1}.`);
         }
     }
 
     public getAI() {
-        return new GoogleGenAI({ apiKey: this.getActiveKey() });
+        const key = this.getActiveKey();
+        return new GoogleGenAI({ apiKey: key });
     }
 }
 
