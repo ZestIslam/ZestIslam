@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Activity, XCircle, Volume2, Volume1, VolumeX, Gauge, Signal, PauseCircle, Clock } from 'lucide-react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { apiManager } from '../services/apiManager';
 
 const LiveScholar: React.FC = () => {
     const [connected, setConnected] = useState(false);
@@ -112,16 +112,10 @@ const LiveScholar: React.FC = () => {
             setError(null);
             setStatus("Connecting...");
             
-            // Safe key retrieval
-            let apiKey = '';
-            try {
-                apiKey = process.env.API_KEY || '';
-            } catch (e) {
-                // Ignore reference error
-            }
+            const apiKey = apiManager.getActiveKey();
 
             if (!apiKey) {
-                setError("API Key Missing. Check Vercel Settings.");
+                setError("API Key Pool is empty. Check environment configuration.");
                 setStatus("Config Error");
                 return;
             }
@@ -143,7 +137,7 @@ const LiveScholar: React.FC = () => {
             streamRef.current = stream;
 
             const sessionPromise = ai.live.connect({
-                model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+                model: 'gemini-2.5-flash-native-audio-preview-12-2025',
                 callbacks: {
                     onopen: () => {
                         setConnected(true);
@@ -163,6 +157,7 @@ const LiveScholar: React.FC = () => {
                                 }
                             }).catch(err => {
                                 console.error("Session send error", err);
+                                apiManager.rotate(); // Rotate on failure
                                 stopSession();
                             });
                         };
@@ -189,14 +184,20 @@ const LiveScholar: React.FC = () => {
                         }
                     },
                     onclose: () => stopSession(),
-                    onerror: (e) => { console.error("Session error", e); setError("Connection interrupted."); stopSession(); }
+                    onerror: (e) => { 
+                        console.error("Session error", e); 
+                        setError("Connection interrupted."); 
+                        apiManager.rotate(); // Rotate on error
+                        stopSession(); 
+                    }
                 },
                 config: {
+                    // Corrected typo: responseModalalities -> responseModalities
                     responseModalities: [Modality.AUDIO],
                     speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
                     systemInstruction: `You are the ZestIslam Scholar, a friendly and wise Islamic assistant created by ZestIslam.
-                    - **IDENTITY**: You must always identify yourself as "The ZestIslam Scholar". If asked about your creation, say "I was created by ZestIslam and powered by Google Gemini."
-                    - **LANGUAGE**: Speak **English** by default. Do NOT speak other languages unless explicitly asked by the user (e.g., "Speak Urdu").
+                    - **IDENTITY**: You must always identify yourself as "The ZestIslam Scholar".
+                    - **LANGUAGE**: Speak **English** by default.
                     - **TONE**: Calm, scholarly, and compassionate.
                     - **CONTENT**: Base your answers on the Quran and authentic Hadith.`
                 }
