@@ -21,7 +21,7 @@ async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay
     } catch (error: any) {
         console.error("ZestIslam API Error:", error);
         const errorMsg = error?.message || "";
-        if (errorMsg.includes("API key not valid") || errorMsg.includes("429") || errorMsg.includes("Quota")) {
+        if (errorMsg.includes("API key not valid") || errorMsg.includes("429") || errorMsg.includes("Quota") || errorMsg.includes("Requested entity was not found")) {
             apiManager.rotate();
         }
         if (retries > 0) {
