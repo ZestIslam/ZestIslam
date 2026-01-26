@@ -10,8 +10,8 @@ IDENTITY & CORE RULES:
 3. **Tone**: Polite, respectful, clear, and wise (Hikmah).
 4. **Formatting**: Use Markdown for clear presentation.`;
 
-// Using gemini-2.5-flash as explicitly requested by user
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+// Using Gemini 3 Flash for all text-based tasks (Tier 1 compatible)
+const DEFAULT_TEXT_MODEL = 'gemini-3-flash-preview';
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -20,10 +20,17 @@ async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay
         return await operation();
     } catch (error: any) {
         console.error("ZestIslam API Error:", error);
-        const errorMsg = error?.message || "";
-        if (errorMsg.includes("API key not valid") || errorMsg.includes("429") || errorMsg.includes("Quota") || errorMsg.includes("Requested entity was not found")) {
+        const errorMsg = typeof error === 'string' ? error : (error?.message || JSON.stringify(error));
+        
+        // Rotate keys if unauthorized, quota hit, or model not found (helps if one key has different tier access)
+        if (errorMsg.includes("API key not valid") || 
+            errorMsg.includes("429") || 
+            errorMsg.includes("Quota") || 
+            errorMsg.includes("Requested entity was not found") ||
+            errorMsg.includes("404")) {
             apiManager.rotate();
         }
+        
         if (retries > 0) {
             await wait(delay);
             return retryOperation(operation, retries - 1, delay * 1.5, fallbackValue);
@@ -37,11 +44,10 @@ export const getScholarChatResponse = async (history: {role: string, content: st
   return await retryOperation(async () => {
     const ai = apiManager.getAI();
     const chat = ai.chats.create({
-      model: DEFAULT_MODEL,
+      model: DEFAULT_TEXT_MODEL,
       config: { 
         systemInstruction: SCHOLAR_INSTRUCTION, 
-        temperature: 0.7,
-        thinkingConfig: { thinkingBudget: 2000 } 
+        temperature: 0.7
       },
       history: history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
     });
@@ -54,7 +60,7 @@ export const generateChatTitle = async (firstMessage: string): Promise<string> =
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Generate a 4-word title for: "${firstMessage}". Return ONLY text.`,
         });
         return response.text?.trim() || "New Conversation";
@@ -65,7 +71,7 @@ export const searchQuranByType = async (query: string): Promise<QuranVerse[]> =>
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Find 5 Quranic verses for topic: "${query}". Return JSON.`,
             config: {
                 responseMimeType: "application/json",
@@ -93,7 +99,7 @@ export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Find 5 authentic Hadiths for topic: "${query}". Return JSON.`,
             config: {
                 responseMimeType: "application/json",
@@ -129,7 +135,7 @@ export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', 
     const data = await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `One short Ayah or Hadith for ${today}. JSON with type, text, source.`,
             config: { responseMimeType: "application/json" }
         });
@@ -143,7 +149,7 @@ export const getNameInsight = async (name: string): Promise<NameInsight | null> 
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Insight for Name of Allah: "${name}". Return JSON with english, urdu, and hinglish.`,
             config: { 
                 responseMimeType: "application/json",
@@ -167,7 +173,7 @@ export const interpretDream = async (dream: string): Promise<DreamResult | null>
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL, 
+            model: DEFAULT_TEXT_MODEL, 
             contents: `Interpret dream: "${dream}". JSON with english, urdu, hinglish.`,
             config: { 
                 responseMimeType: "application/json",
@@ -190,7 +196,7 @@ export const generatePersonalizedDua = async (situation: string): Promise<Genera
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-        model: DEFAULT_MODEL,
+        model: DEFAULT_TEXT_MODEL,
         contents: `Beautiful Dua for: "${situation}". Return JSON.`,
         config: { 
             responseMimeType: "application/json",
@@ -214,7 +220,7 @@ export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggesti
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Dhikr for: "${feeling}". JSON.`,
             config: { responseMimeType: "application/json" }
         });
@@ -226,7 +232,7 @@ export const generateQuiz = async (topic: string, difficulty: string, count: num
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Generate ${count} ${difficulty} MCQs about ${topic}. JSON.`,
             config: { responseMimeType: "application/json" }
         });
@@ -321,11 +327,10 @@ export const generateTadabbur = async (surah: string, verseNumber: number): Prom
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-        model: DEFAULT_MODEL,
+        model: DEFAULT_TEXT_MODEL,
         contents: `Spiritual Tadabbur for ${surah}:${verseNumber}. JSON with english, urdu, hinglish keys.`,
         config: { 
-            responseMimeType: "application/json",
-            thinkingConfig: { thinkingBudget: 1000 }
+            responseMimeType: "application/json"
         }
         });
         return response.text ? JSON.parse(response.text) : null;
@@ -336,11 +341,10 @@ export const generateSharh = async (book: string, hadithNumber: string): Promise
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-        model: DEFAULT_MODEL,
+        model: DEFAULT_TEXT_MODEL,
         contents: `Spiritual Sharh for ${book} Hadith ${hadithNumber}. JSON with english, urdu, hinglish keys.`,
         config: { 
-            responseMimeType: "application/json",
-            thinkingConfig: { thinkingBudget: 1000 }
+            responseMimeType: "application/json"
         }
         });
         return response.text ? JSON.parse(response.text) : null;
@@ -351,7 +355,7 @@ export const findIslamicPlaces = async (query: string, lat: number, lng: number,
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Search for real ${query} near ${locationName || 'current area'}. Lat: ${lat}, Lng: ${lng}. USE Google Maps.`,
             config: {
                 tools: [{ googleMaps: {} }],
@@ -366,11 +370,10 @@ export const searchIslamicWeb = async (query: string): Promise<{text: string, ch
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: `Research Islamic information: "${query}". Use Search.`,
             config: { 
-                tools: [{ googleSearch: {} }],
-                thinkingConfig: { thinkingBudget: 1500 }
+                tools: [{ googleSearch: {} }]
             }
         });
         return { 
@@ -444,7 +447,7 @@ export const analyzeMedia = async (base64Data: string, mimeType: string, prompt:
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: { parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: prompt }] }
         });
         return response.text || "Unable to analyze media content.";
@@ -455,7 +458,7 @@ export const transcribeMedia = async (base64Data: string, mimeType: string): Pro
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
+            model: DEFAULT_TEXT_MODEL,
             contents: {
                 parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: "Provide a detailed transcription." }]
             }
