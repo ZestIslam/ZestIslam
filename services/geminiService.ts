@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { GeneratedDua, QuranVerse, TadabburResult, Hadith, SharhResult, DhikrSuggestion, NameInsight, DreamResult, QuizQuestion, SurahMeta, FullSurahVerse } from "../types";
 import { apiManager } from "./apiManager";
 
@@ -10,24 +10,24 @@ IDENTITY & CORE RULES:
 3. **Tone**: Polite, respectful, clear, and wise (Hikmah).
 4. **Formatting**: Use Markdown for clear presentation.`;
 
-// --- HELPER FUNCTIONS ---
+// Using gemini-2.5-flash as explicitly requested by user
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function retryOperation<T>(operation: () => Promise<T>, retries = 5, delay = 1000, fallbackValue?: T): Promise<T> {
+async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 1000, fallbackValue?: T): Promise<T> {
     try {
         return await operation();
     } catch (error: any) {
         console.error("ZestIslam API Error:", error);
-        
-        // Rotate on any significant error (Quota, Overloaded, etc.)
-        apiManager.rotate(); 
-        
+        const errorMsg = error?.message || "";
+        if (errorMsg.includes("API key not valid") || errorMsg.includes("429") || errorMsg.includes("Quota")) {
+            apiManager.rotate();
+        }
         if (retries > 0) {
             await wait(delay);
             return retryOperation(operation, retries - 1, delay * 1.5, fallbackValue);
         }
-        
         if (fallbackValue !== undefined) return fallbackValue;
         throw error;
     }
@@ -37,8 +37,12 @@ export const getScholarChatResponse = async (history: {role: string, content: st
   return await retryOperation(async () => {
     const ai = apiManager.getAI();
     const chat = ai.chats.create({
-      model: 'gemini-3-pro-preview',
-      config: { systemInstruction: SCHOLAR_INSTRUCTION, temperature: 0.7 },
+      model: DEFAULT_MODEL,
+      config: { 
+        systemInstruction: SCHOLAR_INSTRUCTION, 
+        temperature: 0.7,
+        thinkingConfig: { thinkingBudget: 2000 } 
+      },
       history: history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
     });
     const result = await chat.sendMessage({ message });
@@ -50,7 +54,7 @@ export const generateChatTitle = async (firstMessage: string): Promise<string> =
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `Generate a 4-word title for: "${firstMessage}". Return ONLY text.`,
         });
         return response.text?.trim() || "New Conversation";
@@ -61,7 +65,7 @@ export const searchQuranByType = async (query: string): Promise<QuranVerse[]> =>
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `Find 5 Quranic verses for topic: "${query}". Return JSON.`,
             config: {
                 responseMimeType: "application/json",
@@ -89,7 +93,7 @@ export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `Find 5 authentic Hadiths for topic: "${query}". Return JSON.`,
             config: {
                 responseMimeType: "application/json",
@@ -118,22 +122,19 @@ export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
 export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', text: string, source: string } | null> => {
     const today = new Date().toDateString();
     const CACHE_KEY = `zestislam_wisdom_${today}`;
-
     try {
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) return JSON.parse(cached);
     } catch (e) {}
-
     const data = await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `One short Ayah or Hadith for ${today}. JSON with type, text, source.`,
             config: { responseMimeType: "application/json" }
         });
         return response.text ? JSON.parse(response.text) : null;
     }, 2, 1000, { type: 'Ayah', text: 'Verily, with every hardship comes ease.', source: 'Quran 94:5' });
-    
     if (data) localStorage.setItem(CACHE_KEY, JSON.stringify(data));
     return data;
 }
@@ -142,7 +143,7 @@ export const getNameInsight = async (name: string): Promise<NameInsight | null> 
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `Insight for Name of Allah: "${name}". Return JSON with english, urdu, and hinglish.`,
             config: { 
                 responseMimeType: "application/json",
@@ -166,7 +167,7 @@ export const interpretDream = async (dream: string): Promise<DreamResult | null>
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview', 
+            model: DEFAULT_MODEL, 
             contents: `Interpret dream: "${dream}". JSON with english, urdu, hinglish.`,
             config: { 
                 responseMimeType: "application/json",
@@ -189,7 +190,7 @@ export const generatePersonalizedDua = async (situation: string): Promise<Genera
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: DEFAULT_MODEL,
         contents: `Beautiful Dua for: "${situation}". Return JSON.`,
         config: { 
             responseMimeType: "application/json",
@@ -213,7 +214,7 @@ export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggesti
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `Dhikr for: "${feeling}". JSON.`,
             config: { responseMimeType: "application/json" }
         });
@@ -225,7 +226,7 @@ export const generateQuiz = async (topic: string, difficulty: string, count: num
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `Generate ${count} ${difficulty} MCQs about ${topic}. JSON.`,
             config: { responseMimeType: "application/json" }
         });
@@ -276,7 +277,6 @@ export const textToSpeech = async (text: string): Promise<ArrayBuffer | null> =>
         model: 'gemini-2.5-flash-preview-tts',
         contents: { parts: [{ text }] },
         config: {
-            // Corrected typo: responseModalalities -> responseModalities
             responseModalities: [Modality.AUDIO],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
         }
@@ -321,9 +321,12 @@ export const generateTadabbur = async (surah: string, verseNumber: number): Prom
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: DEFAULT_MODEL,
         contents: `Spiritual Tadabbur for ${surah}:${verseNumber}. JSON with english, urdu, hinglish keys.`,
-        config: { responseMimeType: "application/json" }
+        config: { 
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingBudget: 1000 }
+        }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -333,9 +336,12 @@ export const generateSharh = async (book: string, hadithNumber: string): Promise
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: DEFAULT_MODEL,
         contents: `Spiritual Sharh for ${book} Hadith ${hadithNumber}. JSON with english, urdu, hinglish keys.`,
-        config: { responseMimeType: "application/json" }
+        config: { 
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingBudget: 1000 }
+        }
         });
         return response.text ? JSON.parse(response.text) : null;
     });
@@ -345,7 +351,7 @@ export const findIslamicPlaces = async (query: string, lat: number, lng: number,
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: DEFAULT_MODEL,
             contents: `Search for real ${query} near ${locationName || 'current area'}. Lat: ${lat}, Lng: ${lng}. USE Google Maps.`,
             config: {
                 tools: [{ googleMaps: {} }],
@@ -360,9 +366,12 @@ export const searchIslamicWeb = async (query: string): Promise<{text: string, ch
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: `Research Islamic information: "${query}". Use Search.`,
-            config: { tools: [{ googleSearch: {} }] }
+            config: { 
+                tools: [{ googleSearch: {} }],
+                thinkingConfig: { thinkingBudget: 1500 }
+            }
         });
         return { 
             text: response.text || "", 
@@ -370,8 +379,6 @@ export const searchIslamicWeb = async (query: string): Promise<{text: string, ch
         };
     });
 };
-
-// --- MEDIA SERVICES ---
 
 export const generateThumbnail = async (prompt: string, aspectRatio: string = "1:1", imageSize: string = "1K", usePro: boolean = false): Promise<string | null> => {
     return await retryOperation(async () => {
@@ -387,7 +394,6 @@ export const generateThumbnail = async (prompt: string, aspectRatio: string = "1
                 }
             }
         });
-        
         for (const part of response.candidates?.[0]?.content?.parts || []) {
             if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
         }
@@ -408,12 +414,10 @@ export const generateVeoVideo = async (prompt: string, imageB64?: string, aspect
                 aspectRatio: aspectRatio as any
             }
         });
-
         while (!operation.done) {
             await wait(10000);
             operation = await ai.operations.getVideosOperation({ operation: operation });
         }
-
         const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (downloadLink) return `${downloadLink}&key=${apiManager.getActiveKey()}`;
         return null;
@@ -429,7 +433,6 @@ export const editIslamicImage = async (base64ImageData: string, prompt: string):
                 parts: [{ inlineData: { data: base64ImageData, mimeType: 'image/png' } }, { text: prompt }]
             }
         });
-
         for (const part of response.candidates?.[0]?.content?.parts || []) {
             if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
         }
@@ -441,7 +444,7 @@ export const analyzeMedia = async (base64Data: string, mimeType: string, prompt:
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
+            model: DEFAULT_MODEL,
             contents: { parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: prompt }] }
         });
         return response.text || "Unable to analyze media content.";
@@ -452,7 +455,7 @@ export const transcribeMedia = async (base64Data: string, mimeType: string): Pro
     return await retryOperation(async () => {
         const ai = apiManager.getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: DEFAULT_MODEL,
             contents: {
                 parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: "Provide a detailed transcription." }]
             }
