@@ -1,4 +1,3 @@
-
 export interface Message {
   id: string;
   role: 'user' | 'model';
@@ -43,25 +42,12 @@ export interface Hadith {
 }
 
 export interface HadithBook {
-    id: string; // e.g., 'bukhari'
-    name: string; // e.g., 'Sahih Bukhari'
+    id: string;
+    name: string;
     arabicName: string;
     description: string;
     totalHadiths: number;
-    editionId: string; // Specific API edition ID e.g., 'eng-muhammadmuhsinkhan'
-}
-
-export interface HadithChapter {
-    id: string; // Section ID
-    title: string;
-    number: string;
-}
-
-export interface BrowsedHadith {
-    hadithNumber: string;
-    arabicText: string;
-    englishText: string;
-    grades: any[];
+    editionId: string;
 }
 
 export interface GeneratedDua {
@@ -131,30 +117,17 @@ export interface DhikrSuggestion {
   target: number;
 }
 
-// Multilingual Interfaces
-export interface NameInsightContent {
-  meaning: string;
-  reflection: string;
-  application: string;
-}
-
 export interface NameInsight {
   name: string;
-  english: NameInsightContent;
-  urdu: NameInsightContent;
-  hinglish: NameInsightContent;
-}
-
-export interface DreamContent {
-    interpretation: string;
-    symbols: string[];
-    advice: string;
+  english: { meaning: string; reflection: string; application: string };
+  urdu: { meaning: string; reflection: string; application: string };
+  hinglish: { meaning: string; reflection: string; application: string };
 }
 
 export interface DreamResult {
-    english: DreamContent;
-    urdu: DreamContent;
-    hinglish: DreamContent;
+    english: { interpretation: string; symbols: string[]; advice: string };
+    urdu: { interpretation: string; symbols: string[]; advice: string };
+    hinglish: { interpretation: string; symbols: string[]; advice: string };
 }
 
 export interface QuizQuestion {
@@ -164,7 +137,6 @@ export interface QuizQuestion {
     explanation: string;
 }
 
-// --- SURAH READER TYPES ---
 export interface SurahMeta {
     number: number;
     name: string;
@@ -176,8 +148,7 @@ export interface SurahMeta {
 
 export interface FullSurahVerse {
     number: number;
-    text: string; // Arabic
-    translation: string; // English
+    text: string;
+    translation: string;
     numberInSurah: number;
-    audioSecondary?: string[]; // Optional audio sources if available from API
 }
