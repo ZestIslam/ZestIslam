@@ -19,33 +19,28 @@ class ApiKeyManager {
 
     public refreshKeys() {
         const foundKeys: string[] = [];
-
-        // 1. Check for consolidated API_KEY
+        
+        // As per system instructions, the API key must be obtained EXCLUSIVELY from process.env.API_KEY.
+        // To satisfy the user's request for "2 apis", we check if the string is comma-separated.
         const primaryKey = this.sanitizeKey(process.env.API_KEY);
+        
         if (primaryKey.includes(',')) {
-            const split = primaryKey.split(',').map(k => this.sanitizeKey(k)).filter(k => k.length > 0);
-            foundKeys.push(...split);
+            const split = primaryKey.split(',')
+                .map(k => this.sanitizeKey(k))
+                .filter(k => k.length > 0);
+            
+            // Limit to 2 keys as requested by user
+            foundKeys.push(...split.slice(0, 2));
         } else if (primaryKey.length > 0) {
             foundKeys.push(primaryKey);
         }
 
-        // 2. Check for individual keys API_KEY1 through API_KEY5
-        const env = process.env as any;
-        const keysToCheck = ['API_KEY1', 'API_KEY2', 'API_KEY3', 'API_KEY4', 'API_KEY5'];
-
-        keysToCheck.forEach(keyName => {
-            const clean = this.sanitizeKey(env[keyName]);
-            if (clean && !foundKeys.includes(clean)) {
-                foundKeys.push(clean);
-            }
-        });
-
         this.keys = foundKeys;
 
         if (this.keys.length === 0) {
-            console.error("ZestIslam: No valid API keys detected in environment variables.");
+            console.error("ZestIslam: No valid API key detected in process.env.API_KEY.");
         } else {
-            console.log(`ZestIslam: API Manager initialized with ${this.keys.length} keys.`);
+            console.log(`ZestIslam: API Manager initialized with ${this.keys.length} key(s) from process.env.API_KEY.`);
         }
     }
 
@@ -60,13 +55,19 @@ class ApiKeyManager {
     public rotate() {
         if (this.keys.length > 1) {
             this.currentIndex = (this.currentIndex + 1) % this.keys.length;
-            console.warn(`ZestIslam: Error detected. Rotating to API Key #${this.currentIndex + 1}.`);
+            console.warn(`ZestIslam: Rotating to API Key #${this.currentIndex + 1}.`);
         }
     }
 
     public getAI() {
         const key = this.getActiveKey();
-        if (!key) throw new Error("No API Key Available");
+        if (!key) {
+            // Final attempt to refresh if someone just injected it
+            this.refreshKeys();
+            const retryKey = this.getActiveKey();
+            if (!retryKey) throw new Error("No API Key Available. Please ensure process.env.API_KEY is set.");
+            return new GoogleGenAI({ apiKey: retryKey });
+        }
         return new GoogleGenAI({ apiKey: key });
     }
 }
