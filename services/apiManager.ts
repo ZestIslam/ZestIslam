@@ -8,11 +8,11 @@ class ApiKeyManager {
         this.refreshKeys();
     }
 
-    private sanitizeKey(key: string | undefined): string {
-        if (!key) return '';
+    private sanitizeKey(key: any): string {
+        if (!key || typeof key !== 'string') return '';
         return key
             .replace(/["']/g, '') // Remove all quotes
-            .replace(/\s/g, '')   // Remove all whitespace, newlines, tabs
+            .replace(/\s/g, '')   // Remove all whitespace
             .replace(/\\n/g, '')  // Remove escaped newlines
             .trim();
     }
@@ -20,7 +20,7 @@ class ApiKeyManager {
     public refreshKeys() {
         const foundKeys: string[] = [];
 
-        // 1. Check for consolidated API_KEY (comma separated)
+        // 1. Check for consolidated API_KEY
         const primaryKey = this.sanitizeKey(process.env.API_KEY);
         if (primaryKey.includes(',')) {
             const split = primaryKey.split(',').map(k => this.sanitizeKey(k)).filter(k => k.length > 0);
@@ -30,16 +30,11 @@ class ApiKeyManager {
         }
 
         // 2. Check for individual keys API_KEY1 through API_KEY5
-        const envKeys = [
-            (process.env as any).API_KEY1,
-            (process.env as any).API_KEY2,
-            (process.env as any).API_KEY3,
-            (process.env as any).API_KEY4,
-            (process.env as any).API_KEY5
-        ];
+        const env = process.env as any;
+        const keysToCheck = ['API_KEY1', 'API_KEY2', 'API_KEY3', 'API_KEY4', 'API_KEY5'];
 
-        envKeys.forEach(raw => {
-            const clean = this.sanitizeKey(raw);
+        keysToCheck.forEach(keyName => {
+            const clean = this.sanitizeKey(env[keyName]);
             if (clean && !foundKeys.includes(clean)) {
                 foundKeys.push(clean);
             }
@@ -48,12 +43,9 @@ class ApiKeyManager {
         this.keys = foundKeys;
 
         if (this.keys.length === 0) {
-            console.error("ZestIslam: No valid API keys found in environment (Checked API_KEY, API_KEY1-5).");
+            console.error("ZestIslam: No valid API keys detected in environment variables.");
         } else {
             console.log(`ZestIslam: API Manager initialized with ${this.keys.length} keys.`);
-            this.keys.forEach((key, i) => {
-                console.log(`Key #${i+1} check: Len=${key.length}, Start=${key.substring(0, 4)}...`);
-            });
         }
     }
 
@@ -61,7 +53,8 @@ class ApiKeyManager {
         if (this.keys.length === 0) {
             this.refreshKeys();
         }
-        return this.keys[this.currentIndex % this.keys.length] || '';
+        if (this.keys.length === 0) return '';
+        return this.keys[this.currentIndex % this.keys.length];
     }
 
     public rotate() {
@@ -73,6 +66,7 @@ class ApiKeyManager {
 
     public getAI() {
         const key = this.getActiveKey();
+        if (!key) throw new Error("No API Key Available");
         return new GoogleGenAI({ apiKey: key });
     }
 }
