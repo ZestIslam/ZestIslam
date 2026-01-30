@@ -181,7 +181,7 @@ const App: React.FC = () => {
                 <div className="text-center space-y-6">
                     <div className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center text-white mx-auto shadow-2xl"><Sparkles className="w-10 h-10" /></div>
                     <h2 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight">About ZestIslam</h2>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg">Your modern Islamic companion bridging tradition and technology, exclusively powered by Gemini AI.</p>
+                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg">Your modern Islamic companion bridging tradition and technology, exclusively powered by Gemini 3 Flash.</p>
                 </div>
                 <div className="grid md:grid-cols-2 gap-6 text-center">
                     <a href="https://www.youtube.com/@zestislam" target="_blank" rel="noopener noreferrer" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3 hover:shadow-lg transition-shadow font-bold"><Youtube className="w-8 h-8 text-red-600" />YouTube</a>
