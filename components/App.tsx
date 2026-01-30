@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Book, MessageCircle, Sparkles, Menu, X, Clock, Image, Video, MapPin, Mic, BookOpen, Search, RotateCcw, Heart, Moon, HelpCircle, ChevronRight, Sun, Info, Youtube, Instagram, User, LogIn, LogOut, Bell, Mail, Lock, Settings, KeyRound, Loader2, CheckCircle } from 'lucide-react';
+import { Home, Book, MessageCircle, Sparkles, Menu, X, Clock, Image, Video, MapPin, Mic, BookOpen, Search, RotateCcw, Heart, Moon, HelpCircle, ChevronRight, Sun, Info, Youtube, Instagram, User, LogIn, LogOut, Bell, Mail, Lock, Settings, KeyRound, Loader2, CheckCircle, Cpu, Calculator } from 'lucide-react';
 import PrayerTimes from './PrayerTimes';
 import QuranSearch from './QuranSearch';
 import HadeesSearch from './HadeesSearch';
@@ -14,9 +14,10 @@ import TasbihCounter from './TasbihCounter';
 import NamesOfAllah from './NamesOfAllah';
 import DreamInterpreter from './DreamInterpreter';
 import IslamicQuiz from './IslamicQuiz';
+import ZakatCalculator from './ZakatCalculator';
 import { AppView, UserProfile } from '../types';
 import { getDailyInspiration } from '../services/geminiService';
-import { signInUser, signUpUser, signOutUser, resetUserPassword, sendContactMessage, updateUserPassword, subscribeToAuthChanges } from '../services/userService';
+import { signInUser, signUpUser, signOutUser, resetUserPassword, updateUserPassword, subscribeToAuthChanges } from '../services/userService';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.HOME);
@@ -35,9 +36,6 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [reminderTime, setReminderTime] = useState(() => localStorage.getItem('zestislam_reminder_time') || '09:00');
-  const [sentSuccess, setSentSuccess] = useState(false);
 
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -90,6 +88,7 @@ const App: React.FC = () => {
     { id: AppView.NAMES, label: '99 Names', icon: Heart, group: 'Spiritual' },
     { id: AppView.DUA, label: 'Dua Gen', icon: Sparkles, group: 'Spiritual' },
     { id: AppView.DREAM, label: 'Dream Interpret', icon: Moon, group: 'Tools' },
+    { id: AppView.ZAKAT, label: 'Zakat Calc', icon: Calculator, group: 'Tools' },
     { id: AppView.QUIZ, label: 'Quiz', icon: HelpCircle, group: 'Tools' },
     { id: AppView.MEDIA, label: 'Media Studio', icon: Video, group: 'Creative' },
     { id: AppView.THUMBNAIL, label: 'Thumbnails', icon: Image, group: 'Creative' },
@@ -144,7 +143,7 @@ const App: React.FC = () => {
         );
       case AppView.LOGIN:
           return (
-              <div className="max-w-md mx-auto py-12">
+              <div className="max-w-md mx-auto py-12 px-4">
                   <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 relative overflow-hidden">
                       <div className="text-center mb-8">
                           <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600 mx-auto mb-4"><User className="w-8 h-8" /></div>
@@ -157,6 +156,8 @@ const App: React.FC = () => {
                           <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg disabled:opacity-50">{authLoading ? '...' : (loginMode === 'login' ? 'Sign In' : 'Join Now')}</button>
                       </form>
                       <button onClick={() => setLoginMode(loginMode === 'login' ? 'signup' : 'login')} className="w-full mt-6 text-xs font-bold text-slate-400 uppercase hover:text-emerald-500">{loginMode === 'login' ? "Need an account?" : "Already a member?"}</button>
+                      {authError && <p className="mt-4 text-xs text-red-500 text-center font-bold">{authError}</p>}
+                      {authSuccess && <p className="mt-4 text-xs text-emerald-500 text-center font-bold">{authSuccess}</p>}
                   </div>
               </div>
           );
@@ -172,40 +173,41 @@ const App: React.FC = () => {
       case AppView.TASBIH: return <TasbihCounter />;
       case AppView.NAMES: return <NamesOfAllah />;
       case AppView.DREAM: return <DreamInterpreter />;
+      case AppView.ZAKAT: return <ZakatCalculator />;
       case AppView.QUIZ: return <IslamicQuiz />;
       case AppView.ABOUT:
         return (
-            <div className="max-w-3xl mx-auto space-y-12 py-8">
+            <div className="max-w-3xl mx-auto space-y-12 py-8 px-4">
                 <div className="text-center space-y-6">
                     <div className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center text-white mx-auto shadow-2xl"><Sparkles className="w-10 h-10" /></div>
                     <h2 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight">About ZestIslam</h2>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg">Your modern Islamic companion bridging tradition and technology, exclusively powered by Gemini 2.5 Flash.</p>
+                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg">Your modern Islamic companion bridging tradition and technology, exclusively powered by Gemini AI.</p>
                 </div>
                 <div className="grid md:grid-cols-2 gap-6 text-center">
-                    <a href="https://www.youtube.com/@zestislam" target="_blank" rel="noopener noreferrer" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3"><Youtube className="w-8 h-8 text-red-600" /><span className="font-bold">YouTube</span></a>
-                    <a href="https://www.instagram.com/zest_islam/" target="_blank" rel="noopener noreferrer" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3"><Instagram className="w-8 h-8 text-pink-600" /><span className="font-bold">Instagram</span></a>
+                    <a href="https://www.youtube.com/@zestislam" target="_blank" rel="noopener noreferrer" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3 hover:shadow-lg transition-shadow font-bold"><Youtube className="w-8 h-8 text-red-600" />YouTube</a>
+                    <a href="https://www.instagram.com/zest_islam/" target="_blank" rel="noopener noreferrer" className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center gap-3 hover:shadow-lg transition-shadow font-bold"><Instagram className="w-8 h-8 text-pink-600" />Instagram</a>
                 </div>
             </div>
         );
       case AppView.CONTACT:
         return (
-            <div className="max-w-3xl mx-auto py-8">
+            <div className="max-w-3xl mx-auto py-8 px-4">
                 <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
                     <h3 className="font-bold text-2xl mb-6">Support & Feedback</h3>
-                    <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setSentSuccess(true); }}>
+                    <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setAuthSuccess("Message processed."); setTimeout(()=>setAuthSuccess(null), 3000); }}>
                         <input type="text" className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-none" placeholder="Name" required />
                         <input type="email" className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-none" placeholder="Email" required />
                         <textarea className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-none h-32" placeholder="Message..." required />
                         <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg">Send Message</button>
                     </form>
-                    {sentSuccess && <p className="mt-4 text-emerald-500 font-bold text-center">JazakAllah, Message sent!</p>}
+                    {authSuccess && <p className="mt-4 text-emerald-500 font-bold text-center">JazakAllah, Message sent!</p>}
                 </div>
             </div>
         );
-      case AppView.PRAYER: return <div className="max-w-2xl mx-auto py-8"><PrayerTimes /></div>;
+      case AppView.PRAYER: return <div className="max-w-2xl mx-auto py-8 px-4"><PrayerTimes /></div>;
       case AppView.UPDATE_PASSWORD:
           return (
-              <div className="max-w-md mx-auto py-12">
+              <div className="max-w-md mx-auto py-12 px-4">
                   <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800">
                       <h2 className="text-2xl font-bold mb-8">Set New Password</h2>
                       <form onSubmit={async (e) => { e.preventDefault(); setAuthLoading(true); await updateUserPassword(authForm.password); setAuthLoading(false); setAuthSuccess("Updated!"); setTimeout(() => setView(AppView.HOME), 2000); }} className="space-y-4">
@@ -228,7 +230,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 dark:text-slate-200 flex font-sans transition-colors duration-300">
       <aside className="hidden lg:flex flex-col w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 fixed h-full z-30">
         <div className="p-8 pb-4">
-            <div className="flex items-center gap-3 text-emerald-700 dark:text-emerald-500 mb-8">
+            <div className="flex items-center gap-3 text-emerald-700 dark:text-emerald-500 mb-8 cursor-pointer" onClick={() => setView(AppView.HOME)}>
                 <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg"><Sparkles className="w-6 h-6" /></div>
                 <div><h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">ZestIslam</h1></div>
             </div>
@@ -239,7 +241,7 @@ const App: React.FC = () => {
                     <h3 className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{group}</h3>
                     <div className="space-y-1">
                         {items.map((item) => (
-                            <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${view === item.id ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                            <button key={item.id} onClick={() => { setView(item.id); window.scrollTo(0,0); }} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${view === item.id ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                                 <item.icon className={`w-5 h-5 ${view === item.id ? 'text-emerald-600' : 'text-slate-400'}`} />
                                 <span className="text-sm">{item.label}</span>
                             </button>
@@ -255,17 +257,21 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-2 overflow-hidden"><div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs">{user.name.charAt(0)}</div><p className="text-xs font-bold truncate">{user.name}</p></div>
                         <button onClick={handleLogout} className="text-slate-400 hover:text-red-500"><LogOut className="w-4 h-4" /></button>
                     </div>
-                ) : <button onClick={() => setView(AppView.LOGIN)} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-bold text-emerald-600 hover:bg-white rounded-lg">Sign In</button>}
+                ) : <button onClick={() => setView(AppView.LOGIN)} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-bold text-emerald-600 hover:bg-white rounded-lg transition-colors">Sign In</button>}
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800 p-2 rounded-xl flex items-center justify-center gap-2 mb-2">
+                <Cpu className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Gemini 3 Flash</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setDarkMode(!darkMode)} className="flex items-center justify-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}</button>
-                <button onClick={() => setShowSettings(true)} className="flex items-center justify-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"><Settings className="w-4 h-4" /></button>
+                <button onClick={() => setDarkMode(!darkMode)} className="flex items-center justify-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-colors">{darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}</button>
+                <button onClick={() => setView(AppView.CONTACT)} className="flex items-center justify-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-colors"><Mail className="w-4 h-4" /></button>
             </div>
         </div>
       </aside>
 
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-40">
-        <div className="flex items-center gap-2 text-emerald-700"><Sparkles className="w-5 h-5" /><span className="font-bold text-lg">ZestIslam</span></div>
+        <div className="flex items-center gap-2 text-emerald-700" onClick={() => setView(AppView.HOME)}><Sparkles className="w-5 h-5" /><span className="font-bold text-lg">ZestIslam</span></div>
         <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-slate-600"><Menu className="w-6 h-6" /></button>
       </div>
 
@@ -276,7 +282,7 @@ const App: React.FC = () => {
                   <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-xl">Menu</h2><button onClick={() => setMobileMenuOpen(false)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><X className="w-5 h-5" /></button></div>
                   <nav className="flex-1 overflow-y-auto space-y-1">
                     {navItems.map((item) => (
-                        <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }} className={`w-full flex items-center space-x-3 px-4 py-4 rounded-xl transition-all ${view === item.id ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-5 h-5" /><span>{item.label}</span></button>
+                        <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); window.scrollTo(0,0); }} className={`w-full flex items-center space-x-3 px-4 py-4 rounded-xl transition-all ${view === item.id ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-5 h-5" /><span>{item.label}</span></button>
                     ))}
                   </nav>
               </div>
