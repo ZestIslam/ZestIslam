@@ -1,6 +1,5 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { GeneratedDua, QuranVerse, TadabburResult, Hadith, SharhResult, DhikrSuggestion, NameInsight, DreamResult, QuizQuestion, SurahMeta, FullSurahVerse } from "../types";
-import { apiManager } from "./apiManager";
 
 const SCHOLAR_INSTRUCTION = `You are the ZestIslam Scholar, a knowledgeable and compassionate Islamic assistant created by ZestIslam.
 
@@ -15,34 +14,52 @@ const DEFAULT_TEXT_MODEL = 'gemini-3-flash-preview';
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 1000, fallbackValue?: T): Promise<T> {
+/**
+ * Enhanced retry logic to handle transient 503 (Model Overloaded) and 429 (Rate Limit) errors.
+ * Uses aggressive exponential backoff to handle high-traffic periods gracefully.
+ */
+async function retryOperation<T>(operation: () => Promise<T>, retries = 5, delay = 2000, fallbackValue?: T): Promise<T> {
     try {
         return await operation();
     } catch (error: any) {
-        console.error("ZestIslam API Error:", error);
-        const errorMsg = typeof error === 'string' ? error : (error?.message || JSON.stringify(error));
+        // Model might return error in different formats, handle them all
+        const errorMessage = error?.message || (typeof error === 'string' ? error : JSON.stringify(error));
+        const isTransient = errorMessage.includes("503") || 
+                            errorMessage.includes("overloaded") || 
+                            errorMessage.includes("429") ||
+                            errorMessage.includes("rate limit") ||
+                            errorMessage.includes("UNAVAILABLE");
+
+        console.error(`ZestIslam API Error (Retries left: ${retries}):`, errorMessage);
         
-        // Rotate keys if unauthorized, quota hit, or model not found (helps if one key has different tier access)
-        if (errorMsg.includes("API key not valid") || 
-            errorMsg.includes("429") || 
-            errorMsg.includes("Quota") || 
-            errorMsg.includes("Requested entity was not found") ||
-            errorMsg.includes("404")) {
-            apiManager.rotate();
-        }
-        
-        if (retries > 0) {
+        if (retries > 0 && isTransient) {
             await wait(delay);
-            return retryOperation(operation, retries - 1, delay * 1.5, fallbackValue);
+            return retryOperation(operation, retries - 1, delay * 2, fallbackValue);
         }
+        
         if (fallbackValue !== undefined) return fallbackValue;
         throw error;
     }
 }
 
+/**
+ * Safely parse JSON from model responses to prevent crashes.
+ */
+const safeParseJson = (text: string | undefined, fallback: any) => {
+    if (!text) return fallback;
+    try {
+        // Remove markdown code blocks if present
+        const cleanText = text.replace(/```json|```/g, '').trim();
+        return JSON.parse(cleanText);
+    } catch (e) {
+        console.error("ZestIslam: JSON Parse Error", e);
+        return fallback;
+    }
+};
+
 export const getScholarChatResponse = async (history: {role: string, content: string}[], message: string): Promise<string> => {
   return await retryOperation(async () => {
-    const ai = apiManager.getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const chat = ai.chats.create({
       model: DEFAULT_TEXT_MODEL,
       config: { 
@@ -53,15 +70,15 @@ export const getScholarChatResponse = async (history: {role: string, content: st
     });
     const result = await chat.sendMessage({ message });
     return result.text || "I apologize, I could not generate a response at this time.";
-  }, 3, 1000, "I am momentarily unavailable. Please try your question again in a moment.");
+  }, 5, 2000, "The ZestIslam Scholar is currently experiencing high demand. Please try your question again in a minute.");
 };
 
 export const generateChatTitle = async (firstMessage: string): Promise<string> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Generate a 4-word title for: "${firstMessage}". Return ONLY text.`,
+            contents: `Generate a short 3-4 word title for an Islamic chat about: "${firstMessage}". Return ONLY text.`,
         });
         return response.text?.trim() || "New Conversation";
     }, 2, 500, "New Conversation");
@@ -69,10 +86,10 @@ export const generateChatTitle = async (firstMessage: string): Promise<string> =
 
 export const searchQuranByType = async (query: string): Promise<QuranVerse[]> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Find 5 Quranic verses for topic: "${query}". Return JSON.`,
+            contents: `Find 5 relevant Quranic verses related to: "${query}". Return JSON.`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -91,16 +108,16 @@ export const searchQuranByType = async (query: string): Promise<QuranVerse[]> =>
                 }
             }
         });
-        return JSON.parse(response.text || "[]");
-    }, 3, 1000, []); 
+        return safeParseJson(response.text, []);
+    }, 3, 1500, []); 
 };
 
 export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Find 5 authentic Hadiths for topic: "${query}". Return JSON.`,
+            contents: `Find 5 authentic Hadiths related to: "${query}". Return JSON.`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -121,8 +138,8 @@ export const searchHadithByType = async (query: string): Promise<Hadith[]> => {
                 }
             }
         });
-        return JSON.parse(response.text || "[]");
-    }, 3, 1000, []); 
+        return safeParseJson(response.text, []);
+    }, 3, 1500, []); 
 };
 
 export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', text: string, source: string } | null> => {
@@ -133,24 +150,24 @@ export const getDailyInspiration = async (): Promise<{ type: 'Ayah' | 'Hadith', 
         if (cached) return JSON.parse(cached);
     } catch (e) {}
     const data = await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `One short Ayah or Hadith for ${today}. JSON with type, text, source.`,
+            contents: `Provide one inspirational and short Ayah or Hadith for ${today}. Format as JSON with type, text, source.`,
             config: { responseMimeType: "application/json" }
         });
-        return response.text ? JSON.parse(response.text) : null;
-    }, 2, 1000, { type: 'Ayah', text: 'Verily, with every hardship comes ease.', source: 'Quran 94:5' });
+        return safeParseJson(response.text, null);
+    }, 2, 1000, { type: 'Ayah', text: 'Indeed, with hardship [will be] ease.', source: 'Quran 94:6' });
     if (data) localStorage.setItem(CACHE_KEY, JSON.stringify(data));
     return data;
 }
 
 export const getNameInsight = async (name: string): Promise<NameInsight | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Insight for Name of Allah: "${name}". Return JSON with english, urdu, and hinglish.`,
+            contents: `Provide deep spiritual insight for the Name of Allah: "${name}". Return JSON with english, urdu, and hinglish versions. Each language should have meaning, reflection, and application properties.`,
             config: { 
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -165,16 +182,16 @@ export const getNameInsight = async (name: string): Promise<NameInsight | null> 
                 }
             }
         });
-        return response.text ? JSON.parse(response.text) : null;
+        return safeParseJson(response.text, null);
     });
 }
 
 export const interpretDream = async (dream: string): Promise<DreamResult | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL, 
-            contents: `Interpret dream: "${dream}". JSON with english, urdu, hinglish.`,
+            contents: `Provide an Islamic interpretation for this dream: "${dream}". Return JSON with english, urdu, hinglish keys. Each key should contain interpretation, symbols (array), and advice properties.`,
             config: { 
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -188,16 +205,16 @@ export const interpretDream = async (dream: string): Promise<DreamResult | null>
                 }
             }
         });
-        return response.text ? JSON.parse(response.text) : null;
+        return safeParseJson(response.text, null);
     });
 }
 
 export const generatePersonalizedDua = async (situation: string): Promise<GeneratedDua | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
         model: DEFAULT_TEXT_MODEL,
-        contents: `Beautiful Dua for: "${situation}". Return JSON.`,
+        contents: `Create a beautiful, personalized Dua for someone in this situation: "${situation}". Include Arabic, Transliteration, and English Translation. Return JSON.`,
         config: { 
             responseMimeType: "application/json",
             responseSchema: {
@@ -212,31 +229,31 @@ export const generatePersonalizedDua = async (situation: string): Promise<Genera
             }
         }
         });
-        return response.text ? JSON.parse(response.text) : null;
+        return safeParseJson(response.text, null);
     });
 };
 
 export const getDhikrSuggestion = async (feeling: string): Promise<DhikrSuggestion | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Dhikr for: "${feeling}". JSON.`,
+            contents: `Suggest a specific Dhikr (Remembrance of Allah) for someone feeling: "${feeling}". Format as JSON with arabic, transliteration, meaning, benefit, and target (integer) count.`,
             config: { responseMimeType: "application/json" }
         });
-        return response.text ? JSON.parse(response.text) : null;
+        return safeParseJson(response.text, null);
     });
 }
 
 export const generateQuiz = async (topic: string, difficulty: string, count: number): Promise<QuizQuestion[]> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Generate ${count} ${difficulty} MCQs about ${topic}. JSON.`,
+            contents: `Generate a set of ${count} ${difficulty} MCQs about ${topic} from an Islamic perspective. Format as JSON array of objects with question, options (array of 4), correctIndex (0-3), and explanation.`,
             config: { responseMimeType: "application/json" }
         });
-        return response.text ? JSON.parse(response.text) : [];
+        return safeParseJson(response.text, []);
     });
 }
 
@@ -278,7 +295,7 @@ export const fetchSurahAudio = async (number: number): Promise<string[]> => {
 };
 
 export const textToSpeech = async (text: string): Promise<ArrayBuffer | null> => {
-    const ai = apiManager.getAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: { parts: [{ text }] },
@@ -325,38 +342,38 @@ export const playGeneratedAudio = async (text: string, type: 'general' | 'verse'
 
 export const generateTadabbur = async (surah: string, verseNumber: number): Promise<TadabburResult | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
         model: DEFAULT_TEXT_MODEL,
-        contents: `Spiritual Tadabbur for ${surah}:${verseNumber}. JSON with english, urdu, hinglish keys.`,
+        contents: `Provide spiritual Tadabbur (reflection) for verse ${surah}:${verseNumber}. Format as JSON with english, urdu, hinglish keys. Each key should have a paragraph and a points (array) property.`,
         config: { 
             responseMimeType: "application/json"
         }
         });
-        return response.text ? JSON.parse(response.text) : null;
+        return safeParseJson(response.text, null);
     });
 };
 
 export const generateSharh = async (book: string, hadithNumber: string): Promise<SharhResult | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
         model: DEFAULT_TEXT_MODEL,
-        contents: `Spiritual Sharh for ${book} Hadith ${hadithNumber}. JSON with english, urdu, hinglish keys.`,
+        contents: `Provide spiritual Sharh (explanation) for ${book} Hadith ${hadithNumber}. Format as JSON with english, urdu, hinglish keys. Each key should have a paragraph and a points (array) property.`,
         config: { 
             responseMimeType: "application/json"
         }
         });
-        return response.text ? JSON.parse(response.text) : null;
+        return safeParseJson(response.text, null);
     });
 };
 
 export const findIslamicPlaces = async (query: string, lat: number, lng: number, locationName?: string): Promise<{ places: any[] }> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Search for real ${query} near ${locationName || 'current area'}. Lat: ${lat}, Lng: ${lng}. USE Google Maps.`,
+            contents: `Find real ${query} near ${locationName || 'the user'}. Current coordinates: Lat ${lat}, Lng ${lng}. Use Google Maps and return groundings.`,
             config: {
                 tools: [{ googleMaps: {} }],
                 toolConfig: { retrievalConfig: { latLng: { latitude: lat, longitude: lng } } }
@@ -368,10 +385,10 @@ export const findIslamicPlaces = async (query: string, lat: number, lng: number,
 
 export const searchIslamicWeb = async (query: string): Promise<{text: string, chunks: any[]} | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: `Research Islamic information: "${query}". Use Search.`,
+            contents: `Research the following Islamic topic in detail using the web: "${query}". Provide a comprehensive overview.`,
             config: { 
                 tools: [{ googleSearch: {} }]
             }
@@ -385,11 +402,11 @@ export const searchIslamicWeb = async (query: string): Promise<{text: string, ch
 
 export const generateThumbnail = async (prompt: string, aspectRatio: string = "1:1", imageSize: string = "1K", usePro: boolean = false): Promise<string | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
         const response = await ai.models.generateContent({
             model: model,
-            contents: { parts: [{ text: prompt }] },
+            contents: { parts: [{ text: `Islamic aesthetic digital art: ${prompt}. Cinematic lighting, intricate patterns, spiritual atmosphere.` }] },
             config: {
                 imageConfig: {
                     aspectRatio: aspectRatio as any,
@@ -406,10 +423,10 @@ export const generateThumbnail = async (prompt: string, aspectRatio: string = "1
 
 export const generateVeoVideo = async (prompt: string, imageB64?: string, aspectRatio: string = '16:9'): Promise<string | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         let operation = await ai.models.generateVideos({
             model: 'veo-3.1-fast-generate-preview',
-            prompt: prompt,
+            prompt: `Islamic cinematic visualization: ${prompt}`,
             image: imageB64 ? { imageBytes: imageB64, mimeType: 'image/png' } : undefined,
             config: {
                 numberOfVideos: 1,
@@ -422,18 +439,21 @@ export const generateVeoVideo = async (prompt: string, imageB64?: string, aspect
             operation = await ai.operations.getVideosOperation({ operation: operation });
         }
         const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-        if (downloadLink) return `${downloadLink}&key=${apiManager.getActiveKey()}`;
+        if (downloadLink) return `${downloadLink}&key=${process.env.API_KEY}`;
         return null;
-    });
+    }, 1, 10000); // Fewer retries for video due to length of operation
 };
 
 export const editIslamicImage = async (base64ImageData: string, prompt: string): Promise<string | null> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: {
-                parts: [{ inlineData: { data: base64ImageData, mimeType: 'image/png' } }, { text: prompt }]
+                parts: [
+                    { inlineData: { data: base64ImageData, mimeType: 'image/png' } }, 
+                    { text: `Edit this image based on: ${prompt}. Maintain Islamic aesthetic and modesty.` }
+                ]
             }
         });
         for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -445,10 +465,13 @@ export const editIslamicImage = async (base64ImageData: string, prompt: string):
 
 export const analyzeMedia = async (base64Data: string, mimeType: string, prompt: string): Promise<string> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
-            contents: { parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: prompt }] }
+            contents: { parts: [
+                { inlineData: { data: base64Data, mimeType: mimeType } }, 
+                { text: `Analyze this media from an Islamic perspective: ${prompt}` }
+            ] }
         });
         return response.text || "Unable to analyze media content.";
     });
@@ -456,11 +479,14 @@ export const analyzeMedia = async (base64Data: string, mimeType: string, prompt:
 
 export const transcribeMedia = async (base64Data: string, mimeType: string): Promise<string> => {
     return await retryOperation(async () => {
-        const ai = apiManager.getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: DEFAULT_TEXT_MODEL,
             contents: {
-                parts: [{ inlineData: { data: base64Data, mimeType: mimeType } }, { text: "Provide a detailed transcription." }]
+                parts: [
+                    { inlineData: { data: base64Data, mimeType: mimeType } }, 
+                    { text: "Provide a detailed transcription of this media, paying special attention to any Arabic or Islamic terminology." }
+                ]
             }
         });
         return response.text || "No transcription found.";
